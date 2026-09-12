@@ -212,7 +212,7 @@ export default function LoadingPage() {
         </h2>
 
         <p className="question-text">
-          Enter your details below. to participate in the quiz. Please ensure that the information you provide is <br/>o accurate, as it will be used for identification and communication purposes.
+          Enter your details below. to participate in the quiz. Please ensure that the information you provide is <br/>accurate, as it will be used for identification and communication purposes.
         </p>
 
         <form
