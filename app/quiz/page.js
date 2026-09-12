@@ -124,27 +124,30 @@ function QuizPageContent() {
     const savedParticipant =
       localStorage.getItem("quizParticipant");
 
-    if (savedParticipant) {
-      try {
-        const parsed =
-          JSON.parse(savedParticipant);
+    if (!savedParticipant) {
+      router.replace("/");
+      return;
+    }
 
-        if (
-          parsed.participantId === participantId
-        ) {
-          if (parsed.status === "completed") {
-            router.replace("/");
-            return;
-          }
+    try {
+      const parsed =
+        JSON.parse(savedParticipant);
 
-          setParticipant(parsed);
-        }
-      } catch (error) {
-        console.error(
-          "Invalid participant data",
-          error
-        );
+      if (
+        parsed.participantId !== participantId ||
+        parsed.status === "completed"
+      ) {
+        router.replace("/");
+        return;
       }
+
+      setParticipant(parsed);
+    } catch (error) {
+      console.error(
+        "Invalid participant data",
+        error
+      );
+      router.replace("/");
     }
   }, [participantId, router]);
 
@@ -463,11 +466,11 @@ function QuizPageContent() {
 
   const formatTime = (seconds) => {
     const minutes = Math.floor(
-      seconds / 60
+      seconds / 120
     );
 
     const remainingSeconds =
-      seconds % 60;
+      seconds % 120;
 
     return `${String(minutes).padStart(
       2,
@@ -513,32 +516,16 @@ function QuizPageContent() {
           </p>
 
           <h1>
-            Well done
             {participant?.fullName
-              ? `, ${participant.fullName}`
+              ? ` ${participant.fullName}`
               : ""}
-            !
+            
           </h1>
 
           <p className="result-description">
             Your quiz has been successfully
             submitted.
           </p>
-
-          <div className="score-box">
-            <span>Your Score</span>
-
-            <strong>
-              {score}
-              <small>
-                /{QUESTIONS.length}
-              </small>
-            </strong>
-
-            <p>
-              {percentage}% correct
-            </p>
-          </div>
 
           <p className="result-message">
             Thank you for participating.
@@ -568,11 +555,11 @@ function QuizPageContent() {
 
         <div className="quiz-brand">
                 <div>
-        <Image src="/logo.png" alt="logo" width="43" height="50" style={{ marginRight: "5px" }} /><Image src="/brand name.png" alt="Al Markazul Athari" width="130" height="40" />
+        <Image src="/logo.png" alt="logo" width="38" height="45" style={{ marginRight: "5px" }} /><Image src="/brand name.png" alt="Al Markazul Athari" width="100" height="30" />
                 </div>
 
           {participant && (
-            <p>
+            <p style={{ fontSize: "14px", color: "#000000", fontWeight: "600" }}>
               {participant.fullName}
             </p>
           )}
