@@ -555,14 +555,10 @@ function QuizPageContent() {
 
         <div className="quiz-brand">
                 <div>
-        <Image src="/logo.png" alt="logo" width="38" height="45" style={{ marginRight: "5px" }} /><Image src="/brand name.png" alt="Al Markazul Athari" width="100" height="30" />
+        <Image src="/logo.png" alt="logo" width="35" height="40" style={{ marginRight: "5px" }} /><Image src="/brand name.png" alt="Al Markazul Athari" width="100" height="30" />
                 </div>
 
-          {participant && (
-            <p style={{ fontSize: "14px", color: "#000000", fontWeight: "600" }}>
-              {participant.fullName}
-            </p>
-          )}
+
         </div>
 
         <div className="timer">
