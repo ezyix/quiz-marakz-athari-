@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 import connectDB from "../../lib/mongodb";
 import Participant from "../../models/Participant";
+import QuizState from "../../models/QuizState";
 
+const QUIZ_STATE_KEY = "global";
 
 // ==========================================
 // GET
@@ -296,6 +298,36 @@ export async function PATCH(request) {
       {
         status: 500,
       }
+    );
+  }
+}
+
+export async function DELETE() {
+  try {
+    await connectDB();
+    const quizState = await QuizState.findOne({ key: QUIZ_STATE_KEY })
+      .select("isStarted")
+      .lean();
+
+    if (quizState?.isStarted) {
+      return NextResponse.json(
+        { success: false, message: "End the quiz before clearing participant data." },
+        { status: 409 }
+      );
+    }
+
+    const result = await Participant.deleteMany({});
+
+    return NextResponse.json({
+      success: true,
+      deletedCount: result.deletedCount,
+    });
+  } catch (error) {
+    console.error("Participant deletion error:", error);
+
+    return NextResponse.json(
+      { success: false, message: "Failed to clear participant data." },
+      { status: 500 }
     );
   }
 }

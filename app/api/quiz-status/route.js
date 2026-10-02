@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import connectDB from "../../lib/mongodb";
+import Question from "../../models/Question";
 import QuizState from "../../models/QuizState";
 
 const QUIZ_STATE_KEY = "global";
@@ -33,6 +34,16 @@ export async function PATCH(request) {
     const isStarted = Boolean(body?.isStarted);
 
     await connectDB();
+
+    if (isStarted && !(await Question.exists({}))) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Add at least one question before starting the quiz.",
+        },
+        { status: 409 }
+      );
+    }
 
     const state = await QuizState.findOneAndUpdate(
       { key: QUIZ_STATE_KEY },

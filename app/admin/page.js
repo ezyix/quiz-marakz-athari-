@@ -66,6 +66,8 @@ export default function AdminPage() {
 	const [participants, setParticipants] = useState([]);
 	const [summary, setSummary] = useState(emptySummary);
 	const [loading, setLoading] = useState(false);
+	const [participantsDeleting, setParticipantsDeleting] = useState(false);
+	const [showClearDataModal, setShowClearDataModal] = useState(false);
 	const [error, setError] = useState("");
 	const [activeView, setActiveView] = useState("leaderboard");
 	const [quizStarted, setQuizStarted] = useState(false);
@@ -319,6 +321,11 @@ export default function AdminPage() {
 	}, [authenticated, quizStarted]);
 
 	 const handleStartQuiz = async () => {
+		 if (questions.length === 0) {
+			 setError("Add at least one question before starting the quiz.");
+			 return;
+		 }
+
 		 setStatusUpdating(true);
 
 		 try {
@@ -377,6 +384,33 @@ export default function AdminPage() {
 		setParticipants([]);
 		setSummary(emptySummary);
 		router.replace("/admin/login");
+	};
+
+	const handleClearParticipants = async () => {
+		if (quizStarted || participants.length === 0) {
+			setShowClearDataModal(false);
+			return;
+		}
+
+		setParticipantsDeleting(true);
+		setError("");
+
+		try {
+			const response = await fetch("/api/participants", { method: "DELETE" });
+			const data = await response.json();
+
+			if (!response.ok) {
+				throw new Error(data.message || "Failed to clear participant data.");
+			}
+
+			setParticipants([]);
+			setSummary(emptySummary);
+			setShowClearDataModal(false);
+		} catch (requestError) {
+			setError(requestError.message || "Failed to clear participant data.");
+		} finally {
+			setParticipantsDeleting(false);
+		}
 	};
 
 	const exportCsv = () => {
@@ -470,9 +504,9 @@ export default function AdminPage() {
 			</nav>
 
 			<section className="admin-live-banner">
-				<div className="live-copy"><span className="live-dot" /><div><strong>{quizStarted ? "Quiz is LIVE" : "Quiz not started"}</strong><span>{quizStarted ? "Attendees can register and take the quiz now." : "Press Start to open the quiz for participants."}</span></div></div>
+				<div className="live-copy"><span className="live-dot" /><div><strong>{quizStarted ? "Quiz is LIVE" : "Quiz not started"}</strong><span>{quizStarted ? "Attendees can register and take the quiz now." : questions.length === 0 ? "Add at least one question before starting the quiz." : "Press Start to open the quiz for participants."}</span></div></div>
 				<div className="live-actions">
-					<button className="started-pill" type="button" onClick={handleStartQuiz} disabled={quizStarted || statusUpdating}>
+					<button className="started-pill" type="button" onClick={handleStartQuiz} disabled={quizStarted || statusUpdating || questions.length === 0} title={questions.length === 0 ? "Add at least one question before starting" : undefined}>
 						{quizStarted ? "Started" : "Start"}
 					</button>
 					<button className="end-quiz-button" type="button" onClick={handleEndQuiz} disabled={!quizStarted || statusUpdating}>
@@ -483,7 +517,7 @@ export default function AdminPage() {
 
 			{activeView === "leaderboard" ? (
 				<>
-					<div className="admin-actions"><button onClick={loadParticipants} disabled={loading}>↻ Refresh</button></div>
+					<div className="admin-actions"><button type="button" onClick={loadParticipants} disabled={loading}>↻ Refresh</button><button className="clear-participants-button" type="button" onClick={() => setShowClearDataModal(true)} disabled={quizStarted || participantsDeleting || participants.length === 0} title={quizStarted ? "End the quiz before clearing participant data." : undefined}>{participantsDeleting ? "Clearing..." : "Clear data"}</button></div>
 					{error && <p className="admin-data-error">{error}</p>}
 					<section className="admin-stats">{stats.map(([label, value]) => <article className={`stat-card${label === "Kids" ? " kids-stat-card" : ""}`} key={label}><span>{label}</span>{label !== "Kids" && <strong>{value}</strong>}{label === "Kids" && <div className="kids-gender-counts"><span className="kids-gender-badge male">M - <strong>{summary.kidsMale}</strong></span><span className="kids-gender-badge female">F - <strong>{summary.kidsFemale}</strong></span></div>}</article>)}</section>
 					{leaderboardSections.map(([group, label]) => {
@@ -643,6 +677,47 @@ export default function AdminPage() {
 						{!questions.length && <p className="empty-questions-state">No questions yet. Add the first question to make the quiz available.</p>}
 					</div>
 				</section>
+			)}
+			{showClearDataModal && (
+				<div
+					className="question-modal-backdrop"
+					role="presentation"
+					onClick={(event) => {
+						if (event.target === event.currentTarget && !participantsDeleting) {
+							setShowClearDataModal(false);
+						}
+					}}
+				>
+					<section
+						className="question-modal clear-data-modal"
+						role="alertdialog"
+						aria-modal="true"
+						aria-labelledby="clear-data-title"
+						aria-describedby="clear-data-warning"
+						tabIndex={-1}
+						onKeyDown={(event) => {
+							if (event.key === "Escape" && !participantsDeleting) {
+								setShowClearDataModal(false);
+							}
+						}}
+					>
+						<div className="question-modal-heading">
+							<h2 id="clear-data-title">Clear all participant data?</h2>
+							<button className="question-modal-close" type="button" aria-label="Cancel clearing data" onClick={() => setShowClearDataModal(false)} disabled={participantsDeleting}>
+								×
+							</button>
+						</div>
+						<p className="clear-data-warning" id="clear-data-warning">
+							This will permanently delete all {participants.length} participant records, including their scores and leaderboard results. This action cannot be undone.
+						</p>
+						<div className="clear-data-actions">
+							<button className="clear-data-cancel" type="button" onClick={() => setShowClearDataModal(false)} disabled={participantsDeleting}>Cancel</button>
+							<button className="clear-data-confirm" type="button" onClick={handleClearParticipants} disabled={participantsDeleting}>
+								{participantsDeleting ? "Clearing..." : "Clear data"}
+							</button>
+						</div>
+					</section>
+				</div>
 			)}
 		</main>
 	);

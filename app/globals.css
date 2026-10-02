@@ -3,6 +3,14 @@
           box-sizing: border-box;
         }
 
+        button,
+        a,
+        input[type="button"],
+        input[type="submit"],
+        [role="button"] {
+          -webkit-tap-highlight-color: transparent;
+        }
+
         html,
         body {
           margin: 0;
