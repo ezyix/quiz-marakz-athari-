@@ -74,6 +74,7 @@ export default function AdminPage() {
 	const [statusUpdating, setStatusUpdating] = useState(false);
 	const [questions, setQuestions] = useState([]);
 	const [questionDeleting, setQuestionDeleting] = useState("");
+	const [questionPendingDelete, setQuestionPendingDelete] = useState(null);
 	const [questionDeletingAll, setQuestionDeletingAll] = useState(false);
 	const [questionMenuOpen, setQuestionMenuOpen] = useState(false);
 	const questionMenuRef = useRef(null);
@@ -231,12 +232,12 @@ export default function AdminPage() {
 	};
 
 	const handleDeleteQuestion = async (item) => {
-		if (quizStarted) {
-			setQuestionError("End the quiz before deleting questions.");
+		if (!item) {
 			return;
 		}
 
-		if (!window.confirm(`Delete question ${item.question}? This cannot be undone.`)) {
+		if (quizStarted) {
+			setQuestionError("End the quiz before deleting questions.");
 			return;
 		}
 
@@ -254,6 +255,7 @@ export default function AdminPage() {
 			}
 
 			setQuestions((previous) => previous.filter((question) => question._id !== item._id));
+			setQuestionPendingDelete(null);
 		} catch (requestError) {
 			setQuestionError(requestError.message || "Failed to delete question.");
 		} finally {
@@ -649,14 +651,21 @@ export default function AdminPage() {
 									<button
 										type="button"
 										className="question-delete-button"
-										aria-label={`Delete question ${index + 1}`}
+										aria-label={questionDeleting === item._id ? `Deleting question ${index + 1}` : `Delete question ${index + 1}`}
 										disabled={quizStarted || questionDeleting === item._id}
-										title={quizStarted ? "End the quiz to delete questions" : "Delete question"}
-										onClick={() => handleDeleteQuestion(item)}
+										title={questionDeleting === item._id ? "Deleting question" : quizStarted ? "End the quiz to delete questions" : "Delete question"}
+										onClick={() => {
+											setQuestionError("");
+											setQuestionPendingDelete(item);
+										}}
 									>
-										<svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-											<path d="M3 6h18M8 6V4h8v2m3 0-.9 14H5.9L5 6m4 4v6m6-6v6" />
-										</svg>
+										{questionDeleting === item._id ? (
+											<span className="question-delete-spinner" aria-hidden="true" />
+										) : (
+											<svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+												<path d="M3 6h18M8 6V4h8v2m3 0-.9 14H5.9L5 6m4 4v6m6-6v6" />
+											</svg>
+										)}
 									</button>
 								</div>
 
@@ -677,6 +686,50 @@ export default function AdminPage() {
 						{!questions.length && <p className="empty-questions-state">No questions yet. Add the first question to make the quiz available.</p>}
 					</div>
 				</section>
+			)}
+			{questionPendingDelete && (
+				<div
+					className="question-modal-backdrop"
+					role="presentation"
+					onClick={(event) => {
+						if (event.target === event.currentTarget && questionDeleting !== questionPendingDelete._id) {
+							setQuestionPendingDelete(null);
+							setQuestionError("");
+						}
+					}}
+				>
+					<section
+						className="question-modal clear-data-modal"
+						role="alertdialog"
+						aria-modal="true"
+						aria-labelledby="delete-question-title"
+						aria-describedby="delete-question-warning"
+						tabIndex={-1}
+						onKeyDown={(event) => {
+							if (event.key === "Escape" && questionDeleting !== questionPendingDelete._id) {
+								setQuestionPendingDelete(null);
+								setQuestionError("");
+							}
+						}}
+					>
+						<div className="question-modal-heading">
+							<h2 id="delete-question-title">Delete this question?</h2>
+							<button className="question-modal-close" type="button" aria-label="Cancel question deletion" onClick={() => { setQuestionPendingDelete(null); setQuestionError(""); }} disabled={questionDeleting === questionPendingDelete._id}>
+								×
+							</button>
+						</div>
+						<p className="clear-data-warning" id="delete-question-warning">
+							<strong>{questionPendingDelete.question}</strong> will be permanently deleted. This action cannot be undone.
+						</p>
+						{questionError && <p className="admin-form-error" role="alert">{questionError}</p>}
+						<div className="clear-data-actions">
+							<button className="clear-data-cancel" type="button" onClick={() => { setQuestionPendingDelete(null); setQuestionError(""); }} disabled={questionDeleting === questionPendingDelete._id}>Cancel</button>
+							<button className="clear-data-confirm" type="button" onClick={() => handleDeleteQuestion(questionPendingDelete)} disabled={questionDeleting === questionPendingDelete._id || quizStarted}>
+								{questionDeleting === questionPendingDelete._id ? "Deleting..." : "Delete question"}
+							</button>
+						</div>
+					</section>
+				</div>
 			)}
 			{showClearDataModal && (
 				<div
