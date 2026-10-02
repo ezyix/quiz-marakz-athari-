@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import "./admin.css";
 import {
@@ -22,64 +22,6 @@ const emptySummary = {
 	completed: 0,
 	fastestFinish: null,
 };
-
-const QUIZ_QUESTIONS = [
-  {
-    id: 1,
-    question: "How many verses are in the Quran?",
-    options: [
-      "114",
-      "120",
-      "100",
-      "130",
-    ],
-    answer: "114",
-  },
-  {
-    id: 2,
-    question: "which surah has the most verses?",
-    options: [
-      "Surah Al-Baqarah",
-      "Surah Al-Imran",
-      "Surah An-Nisa",
-      "Surah Al-Ma'idah",
-    ],
-    answer: "Surah Al-Baqarah",
-  },
-  {
-    id: 3,
-    question: "Who is last and final prophet?",
-    options: [
-      "Prophet Muhammad (PBUH)",
-      "Prophet Sulayman (PBUH)",
-      "Prophet Musa (PBUH)",
-      "Prophet Ibrahim (PBUH)",
-    ],
-    answer: "Prophet Muhammad (PBUH)",
-  },
-  {
-    id: 4,
-    question: "Which Prophet was given the ability to understand the language of birds?",
-    options: [
-      "Prophet Muhammad (PBUH)",
-      "Prophet Sulayman (PBUH)",
-      "Prophet Musa (PBUH)",
-      "Prophet Ibrahim (PBUH)",
-    ],
-    answer: "Prophet Sulayman (PBUH)",
-  },
-  {
-    id: 5,
-    question: "The phrase وَمَن يَغْفِرُ الذُّنُوبَ إِلَّا اللَّهُ (“And who can forgive sins except Allah?”) is in:",
-    options: [
-      "Surah Al-Imran, Ayah 135",
-      "Surah An-Nisa, Ayah 135",
-      "Surah Al-Baqarah, Ayah 135",
-      "Surah Al-furqan, Ayah 135",
-    ],
-    answer: "Surah Al-Imran, Ayah 135",
-  },
-];
 
 function formatDuration(duration) {
 	if (duration === null || duration === undefined) {
@@ -128,6 +70,46 @@ export default function AdminPage() {
 	const [activeView, setActiveView] = useState("leaderboard");
 	const [quizStarted, setQuizStarted] = useState(false);
 	const [statusUpdating, setStatusUpdating] = useState(false);
+	const [questions, setQuestions] = useState([]);
+	const [questionDeleting, setQuestionDeleting] = useState("");
+	const [questionDeletingAll, setQuestionDeletingAll] = useState(false);
+	const [questionMenuOpen, setQuestionMenuOpen] = useState(false);
+	const questionMenuRef = useRef(null);
+	const [showQuestionModal, setShowQuestionModal] = useState(false);
+	const [questionSaving, setQuestionSaving] = useState(false);
+	const [questionError, setQuestionError] = useState("");
+	const [questionForm, setQuestionForm] = useState({
+		question: "",
+		options: ["", "", "", ""],
+		answerIndex: "0",
+	});
+
+	useEffect(() => {
+		if (!questionMenuOpen) {
+			return;
+		}
+
+		const handleOutsideClick = (event) => {
+			if (!questionMenuRef.current?.contains(event.target)) {
+				setQuestionMenuOpen(false);
+			}
+		};
+
+		const handleEscape = (event) => {
+			if (event.key === "Escape") {
+				setQuestionMenuOpen(false);
+				questionMenuRef.current?.querySelector(".question-menu-trigger")?.focus();
+			}
+		};
+
+		document.addEventListener("pointerdown", handleOutsideClick);
+		document.addEventListener("keydown", handleEscape);
+
+		return () => {
+			document.removeEventListener("pointerdown", handleOutsideClick);
+			document.removeEventListener("keydown", handleEscape);
+		};
+	}, [questionMenuOpen]);
 
 	useEffect(() => {
 		 if (typeof window === "undefined") {
@@ -190,12 +172,138 @@ export default function AdminPage() {
 		}
 	};
 
+	const loadQuestions = async () => {
+		setQuestionError("");
+
+		try {
+			const response = await fetch("/api/questions", {
+				cache: "no-store",
+			});
+			const data = await response.json();
+
+			if (!response.ok) {
+				throw new Error(data.message || "Failed to load questions.");
+			}
+
+			setQuestions(data.questions || []);
+		} catch (requestError) {
+			setQuestionError(requestError.message || "Failed to load questions.");
+		}
+	};
+
+	const handleQuestionSubmit = async (event) => {
+		event.preventDefault();
+		if (quizStarted) {
+			setQuestionError("End the quiz before adding questions.");
+			return;
+		}
+
+		setQuestionError("");
+		setQuestionSaving(true);
+
+		try {
+			const options = questionForm.options.map((option) => option.trim());
+			const response = await fetch("/api/questions", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({
+					question: questionForm.question.trim(),
+					options,
+					answer: options[Number(questionForm.answerIndex)],
+				}),
+			});
+			const data = await response.json();
+
+			if (!response.ok) {
+				throw new Error(data.message || "Failed to add question.");
+			}
+
+			setQuestions((previous) => [...previous, data.question]);
+			setQuestionForm({ question: "", options: ["", "", "", ""], answerIndex: "0" });
+			setShowQuestionModal(false);
+		} catch (requestError) {
+			setQuestionError(requestError.message || "Failed to add question.");
+		} finally {
+			setQuestionSaving(false);
+		}
+	};
+
+	const handleDeleteQuestion = async (item) => {
+		if (quizStarted) {
+			setQuestionError("End the quiz before deleting questions.");
+			return;
+		}
+
+		if (!window.confirm(`Delete question ${item.question}? This cannot be undone.`)) {
+			return;
+		}
+
+		setQuestionDeleting(item._id);
+		setQuestionError("");
+
+		try {
+			const response = await fetch(`/api/questions/${item._id}`, {
+				method: "DELETE",
+			});
+			const data = await response.json();
+
+			if (!response.ok) {
+				throw new Error(data.message || "Failed to delete question.");
+			}
+
+			setQuestions((previous) => previous.filter((question) => question._id !== item._id));
+		} catch (requestError) {
+			setQuestionError(requestError.message || "Failed to delete question.");
+		} finally {
+			setQuestionDeleting("");
+		}
+	};
+
+	const handleDeleteAllQuestions = async () => {
+		if (quizStarted) {
+			setQuestionError("End the quiz before deleting questions.");
+			setQuestionMenuOpen(false);
+			return;
+		}
+
+		if (!questions.length) {
+			setQuestionMenuOpen(false);
+			return;
+		}
+
+		const confirmed = window.confirm(`Delete all ${questions.length} questions? This cannot be undone.`);
+		setQuestionMenuOpen(false);
+
+		if (!confirmed) {
+			return;
+		}
+
+		setQuestionDeletingAll(true);
+		setQuestionError("");
+
+		try {
+			const response = await fetch("/api/questions", { method: "DELETE" });
+			const data = await response.json();
+
+			if (!response.ok) {
+				throw new Error(data.message || "Failed to delete questions.");
+			}
+
+			setQuestions([]);
+		} catch (requestError) {
+			setQuestionError(requestError.message || "Failed to delete questions.");
+		} finally {
+			setQuestionDeletingAll(false);
+		}
+	};
+
 	useEffect(() => {
 		if (!authenticated) {
 			return;
 		}
 
 		loadParticipants({ silent: true });
+		loadQuestions();
 	}, [authenticated]);
 
 	useEffect(() => {
@@ -394,17 +502,128 @@ export default function AdminPage() {
 					<div className="panel-heading">
 						<div>
 							<p className="admin-kicker">QUESTIONS</p>
-							<h2>Quiz questions</h2>
+							<p className="question-count">{questions.length} </p>
 						</div>
-						<span>{QUIZ_QUESTIONS.length} questions</span>
+						<div className="question-panel-actions">
+							<div className="question-menu-container" ref={questionMenuRef}>
+								<button
+									className="admin-primary-button question-menu-trigger"
+									type="button"
+									disabled={quizStarted || questionDeletingAll}
+									aria-label={questionMenuOpen ? "Close question actions" : "Open question actions"}
+									aria-haspopup="true"
+									aria-expanded={questionMenuOpen}
+									aria-controls="question-actions-menu"
+									title={quizStarted ? "End the quiz to manage questions" : "Question actions"}
+									onClick={() => setQuestionMenuOpen((open) => !open)}
+								>
+									<svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+										{questionMenuOpen ? <path d="m6 6 12 12M18 6 6 18" /> : <path d="M4 6h16M4 12h16M4 18h16" />}
+									</svg>
+								</button>
+								{questionMenuOpen && (
+									<div className="question-actions-menu" id="question-actions-menu" aria-label="Question actions">
+										<button type="button" onClick={() => { setQuestionMenuOpen(false); setShowQuestionModal(true); }} disabled={quizStarted || questionDeletingAll}>
+											Add question
+										</button>
+										<button className="delete-all-questions-action" type="button" onClick={handleDeleteAllQuestions} disabled={!questions.length || quizStarted || questionDeletingAll}>
+											{questionDeletingAll ? "Deleting..." : "Delete all questions"}
+										</button>
+									</div>
+								)}
+							</div>
+						</div>
 					</div>
+					{quizStarted && <p className="question-management-lockout" role="status">End the quiz to add or delete questions.</p>}
+
+					{questionError && !showQuestionModal && <p className="admin-form-error">{questionError}</p>}
+
+					{showQuestionModal && (
+						<div
+							className="question-modal-backdrop"
+							role="presentation"
+							onClick={(event) => {
+								if (event.target === event.currentTarget) {
+									setShowQuestionModal(false);
+								}
+							}}
+						>
+							<section
+								className="question-modal"
+								role="dialog"
+								aria-modal="true"
+								aria-labelledby="question-modal-title"
+								tabIndex={-1}
+								onKeyDown={(event) => {
+									if (event.key === "Escape") {
+										setShowQuestionModal(false);
+									}
+								}}
+							>
+								<div className="question-modal-heading">
+									<h2 id="question-modal-title">Add question</h2>
+									<button className="question-modal-close" type="button" aria-label="Close dialog" onClick={() => setShowQuestionModal(false)}>
+										×
+									</button>
+								</div>
+								{questionError && <p className="admin-form-error">{questionError}</p>}
+								<form className="question-form" onSubmit={handleQuestionSubmit}>
+							<label htmlFor="quiz-question">Question</label>
+							<textarea
+								id="quiz-question"
+								value={questionForm.question}
+								onChange={(event) => setQuestionForm((previous) => ({ ...previous, question: event.target.value }))}
+								maxLength={500}
+								required
+								autoFocus
+							/>
+							<div className="question-option-fields">
+								{questionForm.options.map((option, index) => (
+									<div key={index}>
+										<label htmlFor={`quiz-option-${index}`}>Option {index + 1}</label>
+										<input
+											id={`quiz-option-${index}`}
+											value={option}
+											onChange={(event) => setQuestionForm((previous) => ({
+												...previous,
+												options: previous.options.map((value, optionIndex) => optionIndex === index ? event.target.value : value),
+											}))}
+											maxLength={200}
+											required
+										/>
+									</div>
+								))}
+							</div>
+							<label htmlFor="quiz-answer">Correct answer</label>
+							<select id="quiz-answer" value={questionForm.answerIndex} onChange={(event) => setQuestionForm((previous) => ({ ...previous, answerIndex: event.target.value }))}>
+								{questionForm.options.map((option, index) => <option key={index} value={index}>Option {index + 1}{option.trim() ? `: ${option}` : ""}</option>)}
+							</select>
+							<button className="admin-primary-button" type="submit" disabled={questionSaving || quizStarted}>
+								{quizStarted ? "Quiz is live" : questionSaving ? "Adding..." : "Save question"}
+							</button>
+						</form>
+							</section>
+						</div>
+					)}
 
 					<div className="questions-list">
-						{QUIZ_QUESTIONS.map((item) => (
-							<article key={item.id} className="question-item">
+						{questions.map((item, index) => (
+							<article key={item._id} className="question-item">
 								<div className="question-header">
-									<span className="question-number-badge">Q{item.id}</span>
+									<span className="question-number-badge">Q{index + 1}</span>
 									<strong>{item.question}</strong>
+									<button
+										type="button"
+										className="question-delete-button"
+										aria-label={`Delete question ${index + 1}`}
+										disabled={quizStarted || questionDeleting === item._id}
+										title={quizStarted ? "End the quiz to delete questions" : "Delete question"}
+										onClick={() => handleDeleteQuestion(item)}
+									>
+										<svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+											<path d="M3 6h18M8 6V4h8v2m3 0-.9 14H5.9L5 6m4 4v6m6-6v6" />
+										</svg>
+									</button>
 								</div>
 
 								<ul className="question-options">
@@ -421,6 +640,7 @@ export default function AdminPage() {
 								</ul>
 							</article>
 						))}
+						{!questions.length && <p className="empty-questions-state">No questions yet. Add the first question to make the quiz available.</p>}
 					</div>
 				</section>
 			)}

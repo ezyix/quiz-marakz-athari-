@@ -12,64 +12,6 @@ import {
 } from "next/navigation";
 import "../globals.css";
 
-const QUESTIONS = [
-  {
-    id: 1,
-    question: "How many verses are in the Quran?",
-    options: [
-      "114",
-      "120",
-      "100",
-      "130",
-    ],
-    answer: "114",
-  },
-  {
-    id: 2,
-    question: "which surah has the most verses?",
-    options: [
-      "Surah Al-Baqarah",
-      "Surah Al-Imran",
-      "Surah An-Nisa",
-      "Surah Al-Ma'idah",
-    ],
-    answer: "Surah Al-Baqarah",
-  },
-  {
-    id: 3,
-    question: "Who is last and final prophet?",
-    options: [
-      "Prophet Muhammad (PBUH)",
-      "Prophet Sulayman (PBUH)",
-      "Prophet Musa (PBUH)",
-      "Prophet Ibrahim (PBUH)",
-    ],
-    answer: "Prophet Muhammad (PBUH)",
-  },
-  {
-    id: 4,
-    question: "Which Prophet was given the ability to understand the language of birds?",
-    options: [
-      "Prophet Muhammad (PBUH)",
-      "Prophet Sulayman (PBUH)",
-      "Prophet Musa (PBUH)",
-      "Prophet Ibrahim (PBUH)",
-    ],
-    answer: "Prophet Sulayman (PBUH)",
-  },
-  {
-    id: 5,
-    question: "The phrase وَمَن يَغْفِرُ الذُّنُوبَ إِلَّا اللَّهُ (“And who can forgive sins except Allah?”) is in:",
-    options: [
-      "Surah Al-Imran, Ayah 135",
-      "Surah An-Nisa, Ayah 135",
-      "Surah Al-Baqarah, Ayah 135",
-      "Surah Al-furqan, Ayah 135",
-    ],
-    answer: "Surah Al-Imran, Ayah 135",
-  },
-];
-
 const QUIZ_TIME = 1 * 60;
 
 export default function QuizPage() {
@@ -94,6 +36,10 @@ function QuizPageContent() {
   const participantId = searchParams.get("participantId");
 
   const [participant, setParticipant] = useState(null);
+
+  const [questions, setQuestions] = useState([]);
+
+  const [questionsLoading, setQuestionsLoading] = useState(true);
 
   const [currentQuestion, setCurrentQuestion] = useState(0);
 
@@ -150,6 +96,29 @@ function QuizPageContent() {
       router.replace("/");
     }
   }, [participantId, router]);
+
+  useEffect(() => {
+    const loadQuestions = async () => {
+      try {
+        const response = await fetch("/api/questions", {
+          cache: "no-store",
+        });
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.message || "Unable to load quiz questions.");
+        }
+
+        setQuestions(data.questions || []);
+      } catch (loadError) {
+        setError(loadError.message || "Unable to load quiz questions.");
+      } finally {
+        setQuestionsLoading(false);
+      }
+    };
+
+    loadQuestions();
+  }, []);
 
   // ==========================================
   // Prevent leaving the quiz before completion
@@ -241,7 +210,7 @@ function QuizPageContent() {
   // ==========================================
 
   useEffect(() => {
-    if (completed || submitting) {
+    if (questionsLoading || !questions.length || completed || submitting) {
       return;
     }
 
@@ -255,7 +224,7 @@ function QuizPageContent() {
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [timeLeft, completed, submitting]);
+  }, [timeLeft, completed, submitting, questionsLoading, questions]);
 
   // ==========================================
   // Restore selected answer
@@ -295,7 +264,7 @@ function QuizPageContent() {
 
     if (
       currentQuestion <
-      QUESTIONS.length - 1
+      questions.length - 1
     ) {
       setCurrentQuestion(
         (previous) => previous + 1
@@ -326,7 +295,7 @@ function QuizPageContent() {
   const calculateScore = () => {
     let finalScore = 0;
 
-    QUESTIONS.forEach(
+    questions.forEach(
       (question, index) => {
         if (
           answers[index] ===
@@ -342,12 +311,12 @@ function QuizPageContent() {
 
     if (
       currentQuestion ===
-      QUESTIONS.length - 1
+      questions.length - 1
     ) {
       if (
         lastAnswer &&
         lastAnswer ===
-          QUESTIONS[currentQuestion].answer &&
+          questions[currentQuestion].answer &&
         answers[currentQuestion] !==
           lastAnswer
       ) {
@@ -378,7 +347,7 @@ function QuizPageContent() {
 
       let finalScore = 0;
 
-      QUESTIONS.forEach(
+      questions.forEach(
         (question, index) => {
           if (
             finalAnswers[index] ===
@@ -403,7 +372,7 @@ function QuizPageContent() {
             participantId,
             score: finalScore,
             totalQuestions:
-              QUESTIONS.length,
+              questions.length,
           }),
         }
       );
@@ -434,7 +403,7 @@ function QuizPageContent() {
           finalScore;
 
         updatedParticipant.totalQuestions =
-          QUESTIONS.length;
+          questions.length;
 
         updatedParticipant.completedAt =
           new Date().toISOString();
@@ -499,7 +468,7 @@ function QuizPageContent() {
 
   if (completed) {
     const percentage = Math.round(
-      (score / QUESTIONS.length) *
+          (score / questions.length) *
         100
     );
 
@@ -536,12 +505,29 @@ function QuizPageContent() {
     );
   }
 
+  if (questionsLoading) {
+    return (
+      <main className="quiz-loading">
+        <div className="quiz-loader" />
+        <p>Loading quiz...</p>
+      </main>
+    );
+  }
+
+  if (!questions.length) {
+    return (
+      <main className="quiz-loading">
+        <p>{error || "The quiz is not available yet. Please contact the admin."}</p>
+      </main>
+    );
+  }
+
   const question =
-    QUESTIONS[currentQuestion];
+    questions[currentQuestion];
 
   const progress =
     ((currentQuestion + 1) /
-      QUESTIONS.length) *
+      questions.length) *
     100;
 
   return (
@@ -581,7 +567,7 @@ function QuizPageContent() {
           <span>
             Question{" "}
             {currentQuestion + 1} of{" "}
-            {QUESTIONS.length}
+            {questions.length}
           </span>
 
           <span>
@@ -698,7 +684,7 @@ function QuizPageContent() {
             }
           >
             {currentQuestion ===
-            QUESTIONS.length - 1
+            questions.length - 1
               ? submitting
                 ? "Submitting..."
                 : "Finish Quiz"
@@ -715,7 +701,7 @@ function QuizPageContent() {
 
       <div className="question-navigation">
 
-        {QUESTIONS.map(
+        {questions.map(
           (item, index) => {
 
             const answered =
