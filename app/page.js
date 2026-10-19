@@ -5,12 +5,47 @@ import "./quiz/quiz.css";
 import { useEffect, useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
+import {
+  getCountries,
+  getCountryCallingCode,
+  parsePhoneNumberFromString,
+} from "libphonenumber-js";
+
+const primaryPhoneRegions = {
+  "1": "US",
+  "7": "RU",
+  "39": "IT",
+  "44": "GB",
+  "47": "NO",
+  "61": "AU",
+  "212": "MA",
+  "262": "RE",
+  "358": "FI",
+  "590": "GP",
+  "599": "CW",
+  "290": "SH",
+};
+const phoneCountriesByCallingCode = new Map();
+for (const country of getCountries()) {
+  const callingCode = getCountryCallingCode(country);
+  if (
+    !phoneCountriesByCallingCode.has(callingCode) ||
+    primaryPhoneRegions[callingCode] === country
+  ) {
+    phoneCountriesByCallingCode.set(callingCode, country);
+  }
+}
+const phoneCountries = [...phoneCountriesByCallingCode]
+  .map(([callingCode, country]) => ({ country, callingCode }))
+  .sort((first, second) => Number(first.callingCode) - Number(second.callingCode));
 
 export default function LoadingPage() {
   const router = useRouter();
 
   const [loading, setLoading] = useState(true);
+  const [loadingProgress, setLoadingProgress] = useState(0);
   const [gender, setGender] = useState("");
+  const [phoneCountry, setPhoneCountry] = useState("IN");
   const [formData, setFormData] = useState({
     fullName: "",
     age: "",
@@ -41,7 +76,14 @@ export default function LoadingPage() {
 
   // Loading screen
   useEffect(() => {
+    const loadingStartedAt = Date.now();
+    const progressInterval = setInterval(() => {
+      const elapsed = Date.now() - loadingStartedAt;
+      setLoadingProgress(Math.min(100, Math.floor((elapsed / 5000) * 100)));
+    }, 50);
+
     const timer = setTimeout(async () => {
+      setLoadingProgress(100);
       await refreshQuizStatus();
       setLoading(false);
     }, 5000);
@@ -53,6 +95,7 @@ export default function LoadingPage() {
     return () => {
       clearTimeout(timer);
       clearInterval(poller);
+      clearInterval(progressInterval);
     };
   }, []);
 
@@ -62,7 +105,7 @@ export default function LoadingPage() {
 
     setFormData((previous) => ({
       ...previous,
-      [name]: value,
+      [name]: name === "fullName" ? value.toUpperCase() : value,
     }));
   };
 
@@ -101,6 +144,20 @@ export default function LoadingPage() {
       return;
     }
 
+    const parsedPhone = parsePhoneNumberFromString(
+      formData.whatsapp,
+      phoneCountry
+    );
+    if (!parsedPhone?.isValid()) {
+      const selectedCountry = phoneCountries.find(
+        ({ country }) => country === phoneCountry
+      );
+      setError(
+        `Please enter a valid WhatsApp number for calling code +${selectedCountry?.callingCode || ""}.`
+      );
+      return;
+    }
+
     try {
       setSubmitting(true);
 
@@ -114,6 +171,7 @@ export default function LoadingPage() {
           gender,
           age: Number(formData.age),
           whatsapp: formData.whatsapp.trim(),
+          phoneCountry,
         }),
       });
 
@@ -157,9 +215,21 @@ export default function LoadingPage() {
             />
           </div>
 
-          <h1>AL MARKAZUL ATHARI</h1>
 
-          <div className="quiz-loader spinner" />
+          <div
+            className="loading-progress"
+            role="progressbar"
+            aria-label="Loading quiz"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={loadingProgress}
+          >
+            <div className="loading-progress-fill" style={{ width: `${loadingProgress}%` }} />
+          </div>
+          <br/>
+          <p className="loading-status" role="status">
+            loading....
+          </p>
         </div>
       </main>
     );
@@ -292,17 +362,30 @@ export default function LoadingPage() {
             WhatsApp number
           </label>
 
-          <input
-            id="whatsapp"
-            name="whatsapp"
-            type="tel"
-            inputMode="tel"
-            placeholder="e.g. 98765 43210"
-            value={formData.whatsapp}
-            onChange={handleChange}
-            autoComplete="tel"
-            required
-          />
+          <div className="phone-number-row">
+            <select
+              aria-label="Country calling code"
+              autoComplete="off"
+              value={phoneCountry}
+              onChange={(event) => setPhoneCountry(event.target.value)}
+            >
+              {phoneCountries.map(({ country, callingCode }) => (
+                <option key={country} value={country}>+{callingCode}</option>
+              ))}
+            </select>
+            <input
+              id="whatsapp"
+              name="whatsapp"
+              type="tel"
+              inputMode="tel"
+              placeholder="98765 43210"
+              value={formData.whatsapp}
+              onChange={handleChange}
+              autoComplete="tel-national"
+              aria-label="WhatsApp number"
+              required
+            />
+          </div>
 
           {/* Error */}
 

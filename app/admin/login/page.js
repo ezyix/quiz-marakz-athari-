@@ -14,6 +14,7 @@ export default function AdminLoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loginError, setLoginError] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     if (getAdminSession()) {
@@ -29,6 +30,8 @@ export default function AdminLoginPage() {
       return;
     }
 
+    setLoginError("");
+    setIsSubmitting(true);
     saveAdminSession();
     router.replace("/admin");
   };
@@ -71,8 +74,13 @@ export default function AdminLoginPage() {
 
           {loginError && <p className="admin-form-error">{loginError}</p>}
 
-          <button type="submit" className="admin-primary-button">
-            Sign in
+          <button
+            type="submit"
+            className="admin-primary-button"
+            disabled={isSubmitting}
+            aria-label={isSubmitting ? "Signing in" : undefined}
+          >
+            {isSubmitting ? <span className="admin-spinner" role="status" aria-label="Signing in" /> : "Sign in"}
           </button>
         </form>
       </div>

@@ -853,6 +853,7 @@
 
 .result-card h1 {
   margin: 0;
+  text-transform: uppercase;
 
   font-size: 31px;
 

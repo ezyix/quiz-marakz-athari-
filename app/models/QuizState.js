@@ -12,6 +12,12 @@ const QuizStateSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    durationSeconds: {
+      type: Number,
+      default: 60,
+      min: 60,
+      max: 86400,
+    },
     updatedAt: {
       type: Date,
       default: Date.now,
@@ -22,8 +28,11 @@ const QuizStateSchema = new mongoose.Schema(
   }
 );
 
-const QuizState =
-  mongoose.models.QuizState ||
-  mongoose.model("QuizState", QuizStateSchema);
+const existingQuizState = mongoose.models.QuizState;
+if (existingQuizState && !existingQuizState.schema.path("durationSeconds")) {
+  mongoose.deleteModel("QuizState");
+}
+
+const QuizState = mongoose.models.QuizState || mongoose.model("QuizState", QuizStateSchema);
 
 export default QuizState;

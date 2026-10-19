@@ -2,6 +2,10 @@ import { NextResponse } from "next/server";
 import connectDB from "../../lib/mongodb";
 import Participant from "../../models/Participant";
 import QuizState from "../../models/QuizState";
+import {
+  getCountries,
+  parsePhoneNumberFromString,
+} from "libphonenumber-js";
 
 const QUIZ_STATE_KEY = "global";
 
@@ -95,15 +99,18 @@ export async function POST(request) {
       gender,
       age,
       whatsapp,
+      phoneCountry,
     } = body;
 
     // Validation
 
     if (
-      !fullName ||
+      typeof fullName !== "string" ||
+      !fullName.trim() ||
       !gender ||
       !age ||
-      !whatsapp
+      typeof whatsapp !== "string" ||
+      !whatsapp.trim()
     ) {
       return NextResponse.json(
         {
@@ -143,6 +150,40 @@ export async function POST(request) {
       );
     }
 
+    if (typeof phoneCountry !== "string" || !getCountries().includes(phoneCountry)) {
+      return NextResponse.json(
+        { success: false, message: "Select a valid country calling code." },
+        { status: 400 }
+      );
+    }
+
+    const parsedPhone = parsePhoneNumberFromString(whatsapp.trim(), phoneCountry);
+    if (!parsedPhone?.isValid()) {
+      return NextResponse.json(
+        { success: false, message: "Enter a valid WhatsApp number for the selected country." },
+        { status: 400 }
+      );
+    }
+
+    const normalizedName = fullName.trim().replace(/\s+/g, " ").toUpperCase();
+    const sameNameParticipants = await Participant.find({ fullName: normalizedName })
+      .select("whatsapp")
+      .lean();
+    const isDuplicate = sameNameParticipants.some((participant) => {
+      const existingPhone = parsePhoneNumberFromString(
+        participant.whatsapp,
+        phoneCountry
+      );
+      return existingPhone?.number === parsedPhone.number;
+    });
+
+    if (isDuplicate) {
+      return NextResponse.json(
+        { success: false, message: "This name and WhatsApp number have already been used." },
+        { status: 409 }
+      );
+    }
+
     // Generate unique participant ID
 
     const participantId =
@@ -156,10 +197,10 @@ export async function POST(request) {
     const participant =
       await Participant.create({
         participantId,
-        fullName: fullName.trim(),
+        fullName: normalizedName,
         gender,
         age: Number(age),
-        whatsapp: whatsapp.trim(),
+        whatsapp: parsedPhone.number,
         status: "attending",
         startedAt: new Date(),
       });
@@ -190,6 +231,13 @@ export async function POST(request) {
       }
     );
   } catch (error) {
+    if (error.code === 11000) {
+      return NextResponse.json(
+        { success: false, message: "This name and WhatsApp number have already been used." },
+        { status: 409 }
+      );
+    }
+
     console.error(
       "Participant creation error:",
       error

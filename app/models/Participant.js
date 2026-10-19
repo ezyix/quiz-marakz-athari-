@@ -66,8 +66,20 @@ const ParticipantSchema = new mongoose.Schema(
   }
 );
 
-const Participant =
-  mongoose.models.Participant ||
-  mongoose.model("Participant", ParticipantSchema);
+ParticipantSchema.index(
+  { fullName: 1, whatsapp: 1 },
+  { unique: true, name: "unique_participant_name_whatsapp" }
+);
+
+const existingParticipant = mongoose.models.Participant;
+const hasNamePhoneIndex = existingParticipant?.schema.indexes().some(
+  ([fields, options]) =>
+    options.unique && fields.fullName === 1 && fields.whatsapp === 1
+);
+if (existingParticipant && !hasNamePhoneIndex) {
+  mongoose.deleteModel("Participant");
+}
+
+const Participant = mongoose.models.Participant || mongoose.model("Participant", ParticipantSchema);
 
 export default Participant;

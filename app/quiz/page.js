@@ -12,7 +12,7 @@ import {
 } from "next/navigation";
 import "../globals.css";
 
-const QUIZ_TIME = 1 * 60;
+const DEFAULT_QUIZ_TIME = 60;
 
 export default function QuizPage() {
   return (
@@ -49,7 +49,9 @@ function QuizPageContent() {
 
   const [score, setScore] = useState(0);
 
-  const [timeLeft, setTimeLeft] = useState(QUIZ_TIME);
+  const [timeLeft, setTimeLeft] = useState(DEFAULT_QUIZ_TIME);
+
+  const [timerSettingsLoaded, setTimerSettingsLoaded] = useState(false);
 
   const [submitting, setSubmitting] = useState(false);
 
@@ -118,6 +120,28 @@ function QuizPageContent() {
     };
 
     loadQuestions();
+  }, []);
+
+  useEffect(() => {
+    const loadQuizTimer = async () => {
+      try {
+        const response = await fetch("/api/quiz-status", { cache: "no-store" });
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.message || "Unable to load quiz timer.");
+        }
+
+        setTimeLeft(data.durationSeconds ?? DEFAULT_QUIZ_TIME);
+      } catch (loadError) {
+        console.error("Unable to load quiz timer:", loadError);
+        setTimeLeft(DEFAULT_QUIZ_TIME);
+      } finally {
+        setTimerSettingsLoaded(true);
+      }
+    };
+
+    loadQuizTimer();
   }, []);
 
   // ==========================================
@@ -210,7 +234,7 @@ function QuizPageContent() {
   // ==========================================
 
   useEffect(() => {
-    if (questionsLoading || !questions.length || completed || submitting) {
+    if (!timerSettingsLoaded || questionsLoading || !questions.length || completed || submitting) {
       return;
     }
 
@@ -224,7 +248,7 @@ function QuizPageContent() {
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [timeLeft, completed, submitting, questionsLoading, questions]);
+  }, [timeLeft, completed, submitting, questionsLoading, questions, timerSettingsLoaded]);
 
   // ==========================================
   // Restore selected answer
@@ -434,12 +458,9 @@ function QuizPageContent() {
   // ==========================================
 
   const formatTime = (seconds) => {
-    const minutes = Math.floor(
-      seconds / 120
-    );
+    const minutes = Math.floor(seconds / 60);
 
-    const remainingSeconds =
-      seconds % 120;
+    const remainingSeconds = seconds % 60;
 
     return `${String(minutes).padStart(
       2,
@@ -495,6 +516,14 @@ function QuizPageContent() {
             Your quiz has been successfully
             submitted.
           </p>
+
+          <div className="score-box" aria-label={`Your score: ${score} out of ${questions.length}, ${percentage}%`}>
+            <span>Your Score</span>
+            <strong>
+              {score}<small> / {questions.length}</small>
+            </strong>
+            <p>{percentage}%</p>
+          </div>
 
           <p className="result-message">
             Thank you for participating.
