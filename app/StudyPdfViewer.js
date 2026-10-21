@@ -21,7 +21,7 @@ export default function StudyPdfViewer() {
     }
 
     const resizeObserver = new ResizeObserver(([entry]) => {
-      setPageWidth(Math.min(900, Math.floor(entry.contentRect.width - 24)));
+      setPageWidth(Math.min(420, Math.floor(entry.contentRect.width - 24)));
     });
 
     resizeObserver.observe(viewer);

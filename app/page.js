@@ -378,7 +378,6 @@ export default function LoadingPage() {
             <Image src="/logo.png" alt="Al Markazul Athari" width={48} height={55} />
             <Image src="/brand name.png" alt="Al Markazul Athari" width={150} height={46} />
           </div>
-          <p className="study-timezone">Kerala time (IST)</p>
         </header>
 
         <section className="study-card" aria-labelledby="study-title">
