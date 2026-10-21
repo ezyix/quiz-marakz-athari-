@@ -430,13 +430,7 @@ export default function LoadingPage() {
                 title="Fathiha study material"
                 referrerPolicy="no-referrer"
               />
-              <div className="study-mobile-pdf">
-                <p>Fathiha.pdf</p>
-                <span>Open the study material in your browser to read it.</span>
-                <a href="/Fathiha.pdf" target="_blank" rel="noreferrer">
-                  Open PDF
-                </a>
-              </div>
+
               <div className="study-watermark" aria-hidden="true">
                 AL-MARKAZUL-ATHARI · STUDY MATERIAL
               </div>

@@ -122,14 +122,23 @@
 .study-pdf-viewer {
   display: block;
   width: 100%;
-  height: min(78vh, 1000px);
-  min-height: 500px;
+  height: min(85vh, 1200px);
+  min-height: 600px;
   border: 0;
   user-select: none;
 }
 
-.study-mobile-pdf {
-  display: none;
+.study-fullscreen-link {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: #249cd3;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 700;
+  text-decoration: none;
 }
 
 .study-watermark {
@@ -267,49 +276,19 @@
     font-size: 12px;
   }
 
-  .study-viewer-shell {
-    min-height: 0;
+  .study-brand img:first-child {
+    width: 30px;
+    height: auto;
   }
 
-  .study-pdf-viewer,
-  .study-watermark {
-    display: none;
+  .study-brand img:last-child {
+    width: 76px;
+    height: auto;
   }
 
-  .study-mobile-pdf {
-    display: grid;
-    min-height: 230px;
-    padding: 24px 16px;
-    align-content: center;
-    justify-items: center;
-    gap: 12px;
-    text-align: center;
-  }
-
-  .study-mobile-pdf p {
-    margin: 0;
-    color: #18324a;
-    font-size: 20px;
-    font-weight: 700;
-  }
-
-  .study-mobile-pdf span {
-    color: #6d8295;
-    font-size: 14px;
-    line-height: 1.5;
-  }
-
-  .study-mobile-pdf a {
-    display: inline-flex;
-    min-height: 48px;
-    margin-top: 4px;
-    padding: 0 28px;
-    align-items: center;
-    justify-content: center;
-    border-radius: 12px;
-    background: #249cd3;
-    color: #fff;
-    font-weight: 700;
-    text-decoration: none;
+  .study-pdf-viewer {
+    height: 85vh;
+    height: 85dvh;
+    min-height: 600px;
   }
 }
