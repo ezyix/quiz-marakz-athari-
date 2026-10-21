@@ -59,13 +59,214 @@ function getTimeTaken(startedAt, completedAt) {
 	return "In progress";
 }
 
+async function createParticipantsPdf(participants) {
+	const logoResponse = await fetch("/logo.png");
+	if (!logoResponse.ok) {
+		throw new Error(`Logo request failed with status ${logoResponse.status}.`);
+	}
+	const logoBitmap = await createImageBitmap(await logoResponse.blob());
+	const logoCanvas = document.createElement("canvas");
+	logoCanvas.width = 128;
+	logoCanvas.height = 128;
+	const logoContext = logoCanvas.getContext("2d");
+	if (!logoContext) {
+		logoBitmap.close();
+		throw new Error("Unable to prepare the report logo.");
+	}
+	logoContext.fillStyle = "#ffffff";
+	logoContext.fillRect(0, 0, logoCanvas.width, logoCanvas.height);
+	logoContext.drawImage(logoBitmap, 0, 0, logoCanvas.width, logoCanvas.height);
+	logoBitmap.close();
+	const logoBase64 = logoCanvas.toDataURL("image/jpeg", 0.9).split(",")[1];
+	const logoBinary = atob(logoBase64);
+
+	const toPdfText = (value) =>
+		String(value ?? "--")
+			.normalize("NFKD")
+			.replace(/[\u0300-\u036f]/g, "")
+			.replace(/[^\x20-\x7e]/g, "?")
+			.replace(/[\\()]/g, "\\$&");
+	const truncateText = (value, maxLength) => {
+		const text = String(value ?? "--");
+		return text.length > maxLength
+			? `${text.slice(0, maxLength - 3)}...`
+			: text;
+	};
+	const columns = [
+		{ label: "Name", width: 205 },
+		{ label: "Gender", width: 65 },
+		{ label: "Age", width: 45 },
+		{ label: "Status", width: 90 },
+		{ label: "Score", width: 60 },
+		{ label: "Time Taken", width: 100 },
+		{ label: "Started", width: 205 },
+	];
+	const columnPositions = columns.reduce((positions) => {
+		const previousIndex = positions.length - 1;
+		const previousPosition = previousIndex < 0 ? 36 : positions[previousIndex];
+		const previousWidth = previousIndex < 0 ? 0 : columns[previousIndex].width;
+		positions.push(previousPosition + previousWidth);
+		return positions;
+	}, []);
+	const rowsPerPage = 20;
+	const pages = [];
+	const reportDate = new Intl.DateTimeFormat("en", {
+		day: "2-digit",
+		month: "long",
+		year: "numeric",
+	}).format(new Date());
+
+	for (let index = 0; index < participants.length; index += rowsPerPage) {
+		pages.push(participants.slice(index, index + rowsPerPage));
+	}
+
+	if (pages.length === 0) {
+		pages.push([]);
+	}
+
+	const pageObjectIds = pages.map((_, index) => 5 + index * 2);
+	const objects = [
+		"<< /Type /Catalog /Pages 2 0 R >>",
+		`<< /Type /Pages /Kids [${pageObjectIds.map((id) => `${id} 0 R`).join(" ")}] /Count ${pages.length} >>`,
+		"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>",
+		`<< /Type /XObject /Subtype /Image /Width ${logoCanvas.width} /Height ${logoCanvas.height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${logoBinary.length} >>\nstream\n${logoBinary}\nendstream`,
+	];
+
+	pages.forEach((pageParticipants, index) => {
+		const pageId = pageObjectIds[index];
+		const contentId = pageId + 1;
+		const tableTop = 490;
+		const commands = [
+			"q",
+			"44 0 0 44 36 535 cm",
+			"/Logo Do",
+			"Q",
+			"BT",
+			"/F1 15 Tf",
+			"0.09 0.20 0.29 rg",
+			"90 565 Td",
+			"(Participant Data) Tj",
+			"/F1 9 Tf",
+			"0.40 0.51 0.58 rg",
+			"0 -16 Td",
+			`(Total participants: ${participants.length} | Page ${index + 1} of ${pages.length}) Tj`,
+			"ET",
+			"BT",
+			"/F1 9 Tf",
+			"0.40 0.51 0.58 rg",
+			`1 0 0 1 690 565 Tm`,
+			`(${toPdfText(reportDate)}) Tj`,
+			"ET",
+			"0.22 0.50 0.81 rg",
+			`36 ${tableTop} ${columns.reduce((total, column) => total + column.width, 0)} 24 re f`,
+		];
+
+		commands.push("BT", "/F1 8 Tf", "1 1 1 rg");
+		columns.forEach((column, columnIndex) => {
+			commands.push(
+				`1 0 0 1 ${columnPositions[columnIndex] + 6} ${tableTop + 9} Tm`,
+				`(${toPdfText(column.label)}) Tj`
+			);
+		});
+		commands.push("ET");
+
+		if (!pageParticipants.length) {
+			commands.push(
+				"BT",
+				"/F1 9 Tf",
+				"0.40 0.51 0.58 rg",
+				`42 ${tableTop - 15} Td`,
+				"(No participants to display.) Tj",
+				"ET"
+			);
+		}
+
+		pageParticipants.forEach((participant, rowIndex) => {
+			const rowTop = tableTop - rowIndex * 21;
+			const rowBottom = rowTop - 21;
+			const rowValues = [
+				participant.fullName,
+				participant.gender,
+				participant.age,
+				participant.status === "completed" ? "Completed" : "In progress",
+				participant.status === "completed"
+					? `${participant.score}/${participant.totalQuestions}`
+					: "--",
+				getTimeTaken(participant.startedAt, participant.completedAt),
+				formatDate(participant.startedAt),
+			];
+
+			if (rowIndex % 2 === 0) {
+				commands.push(`0.96 0.98 1 rg 36 ${rowBottom} 770 21 re f`);
+			}
+			commands.push(`0.86 0.91 0.94 RG 0.5 w 36 ${rowBottom} m 806 ${rowBottom} l S`);
+			commands.push("BT", "/F1 8 Tf", "0.09 0.20 0.29 rg");
+			rowValues.forEach((value, columnIndex) => {
+				const maxLength = Math.floor((columns[columnIndex].width - 12) / 4.5);
+				const outputValue = truncateText(value, maxLength);
+				commands.push(
+					`1 0 0 1 ${columnPositions[columnIndex] + 6} ${rowTop - 9} Tm`,
+					`(${toPdfText(outputValue)}) Tj`
+				);
+			});
+			commands.push("ET");
+
+			if (participant.whatsapp) {
+				commands.push(
+					"BT",
+					"/F1 6 Tf",
+					"0.40 0.51 0.58 rg",
+					`1 0 0 1 ${columnPositions[0] + 6} ${rowTop - 17} Tm`,
+					`(${toPdfText(truncateText(participant.whatsapp, 38))}) Tj`,
+					"ET"
+				);
+			}
+		});
+
+		const pageText = commands.join("\n");
+
+		objects.push(
+			`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 842 595] /Resources << /Font << /F1 3 0 R >> /XObject << /Logo 4 0 R >> >> /Contents ${contentId} 0 R >>`,
+			`<< /Length ${pageText.length} >>\nstream\n${pageText}\nendstream`
+		);
+	});
+
+	let pdf = "%PDF-1.4\n";
+	const offsets = [0];
+
+	objects.forEach((object, index) => {
+		offsets.push(pdf.length);
+		pdf += `${index + 1} 0 obj\n${object}\nendobj\n`;
+	});
+
+	const xrefOffset = pdf.length;
+	pdf += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+	for (const offset of offsets.slice(1)) {
+		pdf += `${String(offset).padStart(10, "0")} 00000 n \n`;
+	}
+	pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`;
+
+	const pdfBytes = new Uint8Array(pdf.length);
+	for (let index = 0; index < pdf.length; index += 1) {
+		pdfBytes[index] = pdf.charCodeAt(index);
+	}
+
+	return new Blob([pdfBytes], { type: "application/pdf" });
+}
+
 export default function AdminPage() {
 	const router = useRouter();
 	const [authenticated, setAuthenticated] = useState(false);
 	const [isSigningOut, setIsSigningOut] = useState(false);
+	const [installPrompt, setInstallPrompt] = useState(null);
+	const [installMessage, setInstallMessage] = useState("");
+	const [installMessageVisible, setInstallMessageVisible] = useState(false);
+	const [installMessageId, setInstallMessageId] = useState(0);
+	const [isInstalled, setIsInstalled] = useState(false);
 	const [participants, setParticipants] = useState([]);
 	const [summary, setSummary] = useState(emptySummary);
-	const [loading, setLoading] = useState(false);
+	const [loading, setLoading] = useState(true);
+	const [questionsLoading, setQuestionsLoading] = useState(true);
 	const [participantsDeleting, setParticipantsDeleting] = useState(false);
 	const [showClearDataModal, setShowClearDataModal] = useState(false);
 	const [error, setError] = useState("");
@@ -90,6 +291,11 @@ export default function AdminPage() {
 		options: ["", "", "", ""],
 		answerIndex: "0",
 	});
+
+	const showInstallMessage = (message) => {
+		setInstallMessage(message);
+		setInstallMessageId((id) => id + 1);
+	};
 
 	useEffect(() => {
 		if (!questionMenuOpen) {
@@ -117,6 +323,47 @@ export default function AdminPage() {
 			document.removeEventListener("keydown", handleEscape);
 		};
 	}, [questionMenuOpen]);
+
+	useEffect(() => {
+		const handleBeforeInstallPrompt = (event) => {
+			event.preventDefault();
+			setInstallPrompt(event);
+		};
+		const handleAppInstalled = () => {
+			setInstallPrompt(null);
+			setIsInstalled(true);
+			showInstallMessage("Admin Quiz app installed.");
+		};
+		const standaloneQuery = window.matchMedia("(display-mode: standalone)");
+
+		setIsInstalled(standaloneQuery.matches);
+		window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
+		window.addEventListener("appinstalled", handleAppInstalled);
+
+		return () => {
+			window.removeEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
+			window.removeEventListener("appinstalled", handleAppInstalled);
+		};
+	}, []);
+
+	useEffect(() => {
+		if (installMessageId === 0) {
+			return;
+		}
+
+		setInstallMessageVisible(true);
+		const hideTimeout = setTimeout(() => {
+			setInstallMessageVisible(false);
+		}, 4700);
+		const clearTimeoutId = setTimeout(() => {
+			setInstallMessage("");
+		}, 5000);
+
+		return () => {
+			clearTimeout(hideTimeout);
+			clearTimeout(clearTimeoutId);
+		};
+	}, [installMessageId]);
 
 	useEffect(() => {
 		 if (typeof window === "undefined") {
@@ -181,6 +428,7 @@ export default function AdminPage() {
 	};
 
 	const loadQuestions = async () => {
+		setQuestionsLoading(true);
 		setQuestionError("");
 
 		try {
@@ -196,6 +444,8 @@ export default function AdminPage() {
 			setQuestions(data.questions || []);
 		} catch (requestError) {
 			setQuestionError(requestError.message || "Failed to load questions.");
+		} finally {
+			setQuestionsLoading(false);
 		}
 	};
 
@@ -311,7 +561,7 @@ export default function AdminPage() {
 			return;
 		}
 
-		loadParticipants({ silent: true });
+		loadParticipants();
 		loadQuestions();
 	}, [authenticated]);
 
@@ -421,6 +671,30 @@ export default function AdminPage() {
 		router.replace("/admin/login");
 	};
 
+	const handleInstallApp = async () => {
+		if (!installPrompt) {
+			showInstallMessage(
+				"To install, open your browser menu and choose Install app or Add to Home Screen."
+			);
+			return;
+		}
+
+		try {
+			await installPrompt.prompt();
+			const { outcome } = await installPrompt.userChoice;
+			showInstallMessage(
+				outcome === "accepted"
+					? "Admin Quiz app installed."
+					: "App installation was cancelled."
+			);
+		} catch (installError) {
+			console.error("Admin app installation failed:", installError);
+			showInstallMessage("Unable to install the app. Try your browser menu.");
+		} finally {
+			setInstallPrompt(null);
+		}
+	};
+
 	const handleClearParticipants = async () => {
 		if (quizStarted || participants.length === 0) {
 			setShowClearDataModal(false);
@@ -448,39 +722,29 @@ export default function AdminPage() {
 		}
 	};
 
-	const exportCsv = () => {
-		const headings = [
-			"Participant ID",
-			"Full Name",
-			"Gender",
-			"Age",
-			"WhatsApp",
-			"Status",
-			"Score",
-			"Total Questions",
-			"Started At",
-			"Completed At",
-		];
-		const rows = participants.map((participant) => [
-			participant.participantId,
-			participant.fullName,
-			participant.gender,
-			participant.age,
-			participant.whatsapp,
-			participant.status,
-			participant.score,
-			participant.totalQuestions,
-			participant.startedAt,
-			participant.completedAt || "",
-		]);
-		const csv = [headings, ...rows]
-			.map((row) => row.map((value) => `"${String(value ?? "").replaceAll('"', '""')}"`).join(","))
-			.join("\n");
-		const link = document.createElement("a");
-		link.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
-		link.download = "al-markazul-participants.csv";
-		link.click();
-		URL.revokeObjectURL(link.href);
+	const handleDownloadParticipantsPdf = async () => {
+		if (loading || participants.length === 0) {
+			return;
+		}
+
+		showInstallMessage("Downloading participant data as PDF...");
+		await new Promise((resolve) => window.setTimeout(resolve, 100));
+
+		try {
+			const pdf = await createParticipantsPdf(participants);
+			const url = URL.createObjectURL(pdf);
+			const link = document.createElement("a");
+			link.href = url;
+			link.download = "al-markazul-participants.pdf";
+			document.body.appendChild(link);
+			link.click();
+			link.remove();
+			window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+			showInstallMessage("Downloading..");
+		} catch (downloadError) {
+			console.error("Participant PDF download failed:", downloadError);
+			showInstallMessage("Unable to create the participant PDF.");
+		}
 	};
 
 	if (!authenticated) {
@@ -528,18 +792,29 @@ export default function AdminPage() {
 		<main className="admin-page">
 			<header className="admin-header">
                 <div>
-				<Image src="/logo.png" alt="logo" width="43" height="50" style={{ marginRight: "5px" }} /><Image src="/brand name.png" alt="Al Markazul Athari" width="130" height="40" />
+                <Image src="/logo.png" alt="logo" width="43" height="50" style={{ marginRight: "5px" }} /><Image src="/brand name.png" alt="Al Markazul Athari" width="130" height="40" />
                 </div>
-				<button
-					type="button"
-					className="admin-signout"
-					onClick={handleSignOut}
-					disabled={isSigningOut}
-					aria-label={isSigningOut ? "Signing out" : undefined}
-				>
-					{isSigningOut ? <span className="admin-spinner" role="status" aria-label="Signing out" /> : "Sign out"}
-				</button>
+                <div className="admin-header-actions">
+                	<button
+						type="button"
+						className="admin-signout"
+						onClick={handleSignOut}
+						disabled={isSigningOut}
+						aria-label={isSigningOut ? "Signing out" : undefined}
+					>
+						{isSigningOut ? <span className="admin-spinner" role="status" aria-label="Signing out" /> : "Sign out"}
+					</button>
+				</div>
 			</header>
+			{installMessage && (
+				<div
+					className={`admin-install-message${installMessageVisible ? " is-visible" : ""}`}
+					role="status"
+					aria-live="polite"
+				>
+					{installMessage}
+				</div>
+			)}
 
 			<nav className="admin-tabs" aria-label="Admin sections">
 				<button className={activeView === "questions" ? "admin-tab active" : "admin-tab"} onClick={() => setActiveView("questions")}>Questions</button>
@@ -560,14 +835,35 @@ export default function AdminPage() {
 
 			{activeView === "leaderboard" ? (
 				<>
-					<div className="admin-actions"><button type="button" onClick={loadParticipants} disabled={loading}>↻ Refresh</button><button className="clear-participants-button" type="button" onClick={() => setShowClearDataModal(true)} disabled={quizStarted || participantsDeleting || participants.length === 0} title={quizStarted ? "End the quiz before clearing participant data." : undefined}>{participantsDeleting ? "Clearing..." : "Clear data"}</button></div>
+					<div className="admin-actions">
+						<button type="button" onClick={loadParticipants} disabled={loading}>↻ Refresh</button>
+						<button
+							type="button"
+							className="download-participants-pdf"
+							onClick={handleDownloadParticipantsPdf}
+							disabled={loading || participants.length === 0}
+						>
+							<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+								<path d="M7 3h7l5 5v13H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z" />
+								<path d="M14 3v6h6M8 15h8m-8 3h8" />
+							</svg>
+							Download data as PDF
+						</button>
+						<button className="clear-participants-button" type="button" onClick={() => setShowClearDataModal(true)} disabled={quizStarted || participantsDeleting || participants.length === 0} title={quizStarted ? "End the quiz before clearing participant data." : undefined}>{participantsDeleting ? "Clearing..." : "Clear data"}</button>
+					</div>
 					{error && <p className="admin-data-error">{error}</p>}
-					<section className="admin-stats">{stats.map(([label, value]) => <article className={`stat-card${label === "Kids" ? " kids-stat-card" : ""}`} key={label}><span>{label}</span>{label !== "Kids" && <strong>{value}</strong>}{label === "Kids" && <div className="kids-gender-counts"><span className="kids-gender-badge male">M - <strong>{summary.kidsMale}</strong></span><span className="kids-gender-badge female">F - <strong>{summary.kidsFemale}</strong></span></div>}</article>)}</section>
+					<section className="admin-stats">{stats.map(([label, value]) => <article className={`stat-card${label === "Kids" ? " kids-stat-card" : ""}`} key={label}><span>{label}</span>{loading ? <span className="admin-data-spinner" role="status" aria-label={`Loading ${label.toLowerCase()}`} /> : label !== "Kids" ? <strong>{value}</strong> : <div className="kids-gender-counts"><span className="kids-gender-badge male">M - <strong>{summary.kidsMale}</strong></span><span className="kids-gender-badge female">F - <strong>{summary.kidsFemale}</strong></span></div>}</article>)}</section>
 					{leaderboardSections.map(([group, label]) => {
 						const leaderboardParticipants = getLeaderboardParticipants(group);
 
 						return (
 							<section className="participants-panel" key={group}>
+								{loading && (
+									<div className="participants-loading-state" role="status">
+										<span className="admin-data-spinner" aria-hidden="true" />
+										<span>Loading participants...</span>
+									</div>
+								)}
 								<div className="panel-heading"><div><p className="admin-kicker">LIVE RESULTS</p><h2>{label}</h2></div><span>{leaderboardParticipants.length} records</span></div>
 								<div className="table-wrap"><table><thead><tr><th>Name</th><th>Gender</th><th>Age</th><th>Status</th><th>Score</th><th>Time Taken</th><th>Started</th></tr></thead><tbody>{leaderboardParticipants.map((participant) => <tr key={participant._id || participant.participantId}><td><strong className="participant-name"><svg aria-hidden="true" viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm0 2c-4.42 0-8 2.24-8 5v1h16v-1c0-2.76-3.58-5-8-5Z" /></svg>{participant.fullName}</strong><small className="participant-whatsapp"><svg aria-hidden="true" viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5.1-1.3A10 10 0 1 0 12 2zm0 18a8 8 0 0 1-4.1-1.1l-.3-.2-3 .8.8-2.9-.2-.3A8 8 0 1 1 12 20zm4.4-5.9c-.2-.1-1.4-.7-1.6-.8-.2-.1-.4-.1-.5.1-.2.2-.6.8-.8.9-.1.2-.3.2-.5.1-.2-.1-1-.4-1.9-1.2-.7-.6-1.2-1.4-1.3-1.6-.1-.2 0-.3.1-.4l.4-.4c.1-.1.2-.2.2-.4.1-.1 0-.3 0-.4l-.7-1.7c-.2-.4-.3-.4-.5-.4h-.4c-.2 0-.4.1-.6.3-.2.2-.8.8-.8 1.9s.8 2.2.9 2.4c.1.1 1.6 2.4 3.8 3.4.5.2.9.4 1.2.5.5.2 1 .2 1.3.1.4-.1 1.4-.6 1.6-1.1.2-.5.2-1 .1-1.1-.1-.1-.2-.2-.4-.3z" /></svg>{participant.whatsapp}</small></td><td>{participant.gender}</td><td>{participant.age}</td><td><span className={`status-badge ${participant.status}`}>{participant.status === "completed" ? "Completed" : "In progress"}</span></td><td>{participant.status === "completed" ? `${participant.score}/${participant.totalQuestions}` : "--"}</td><td>{getTimeTaken(participant.startedAt, participant.completedAt)}</td><td>{formatDate(participant.startedAt)}</td></tr>)}{!leaderboardParticipants.length && <tr><td colSpan="7" className="empty-state">{loading ? "Loading participants..." : "No participants ......"}</td></tr>}</tbody></table></div>
 							</section>
@@ -577,9 +873,9 @@ export default function AdminPage() {
 			) : (
 				<section className="questions-panel">
 					<div className="panel-heading">
-						<div>
+					<div>
 							<p className="admin-kicker">QUESTIONS</p>
-							<p className="question-count">{questions.length} </p>
+							<p className="question-count">{questionsLoading ? <span className="admin-data-spinner" role="status" aria-label="Loading questions" /> : `Total - ${questions.length} Q`}</p>
 						</div>
 						<div className="question-panel-actions">
 							<div className="question-menu-container" ref={questionMenuRef}>
@@ -719,7 +1015,12 @@ export default function AdminPage() {
 					)}
 
 					<div className="questions-list">
-						{questions.map((item, index) => (
+						{questionsLoading ? (
+							<div className="questions-loading-state" role="status">
+								<span className="admin-data-spinner" aria-hidden="true" />
+								<span>Loading questions...</span>
+							</div>
+						) : questions.map((item, index) => (
 							<article key={item._id} className="question-item">
 								<div className="question-header">
 									<span className="question-number-badge">Q{index + 1}</span>
@@ -759,8 +1060,38 @@ export default function AdminPage() {
 								</ul>
 							</article>
 						))}
-						{!questions.length && <p className="empty-questions-state">No questions yet. Add the first question to make the quiz available.</p>}
+						{!questionsLoading && !questions.length && <p className="empty-questions-state">No questions yet. Add the first question to make the quiz available.</p>}
 					</div>
+					{!isInstalled && (
+						<div className="admin-install-area">
+							<div className="admin-install-copy">
+								<div className="admin-install-icon-wrap" aria-hidden="true">
+									<Image
+										className="admin-install-logo"
+										src="/logo.png"
+										alt=""
+										width={42}
+										height={42}
+									/>
+								</div>
+								<div>
+									<h3>Install the Admin Quiz app</h3>
+									<p>Open your quiz dashboard quickly from your home screen.</p>
+								</div>
+							</div>
+							<button
+								type="button"
+								className="admin-install-button"
+								onClick={handleInstallApp}
+							>
+								<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+									<path d="M12 3v12m-5-5 5 5 5-5" />
+									<path d="M5 17v3h14v-3" />
+								</svg>
+								Install Admin Quiz App
+							</button>
+						</div>
+					)}
 				</section>
 			)}
 			{questionPendingDelete && (

@@ -60,6 +60,14 @@ export default function LoadingPage() {
   const [quizStarted, setQuizStarted] = useState(false);
   const [remainingSeconds, setRemainingSeconds] = useState(null);
   const [captureGuardActive, setCaptureGuardActive] = useState(false);
+  const [studyToastMessage, setStudyToastMessage] = useState("");
+  const [studyToastVisible, setStudyToastVisible] = useState(false);
+  const [studyToastId, setStudyToastId] = useState(0);
+
+  const showStudyToast = (message) => {
+    setStudyToastMessage(message);
+    setStudyToastId((id) => id + 1);
+  };
 
   const refreshQuizStatus = async () => {
     try {
@@ -152,6 +160,65 @@ export default function LoadingPage() {
       clearTimeout(captureTimeout);
     };
   }, [loading, quizStarted]);
+
+  useEffect(() => {
+    if (studyToastId === 0) {
+      return;
+    }
+
+    setStudyToastVisible(true);
+    const hideTimeout = setTimeout(() => {
+      setStudyToastVisible(false);
+    }, 3000);
+    const clearTimeoutId = setTimeout(() => {
+      setStudyToastMessage("");
+    }, 3300);
+
+    return () => {
+      clearTimeout(hideTimeout);
+      clearTimeout(clearTimeoutId);
+    };
+  }, [studyToastId]);
+
+  const handleShareStudyPdf = async () => {
+    if (typeof navigator.share !== "function") {
+      showStudyToast("PDF sharing is not supported by this browser.");
+      return;
+    }
+
+    try {
+      const response = await fetch("/Fathiha.pdf");
+      if (!response.ok) {
+        throw new Error(`PDF request failed with status ${response.status}.`);
+      }
+
+      const pdfBlob = await response.blob();
+      const pdfFile = new File([pdfBlob], "Fathiha.pdf", {
+        type: "application/pdf",
+      });
+
+      if (
+        typeof navigator.canShare !== "function" ||
+        !navigator.canShare({ files: [pdfFile] })
+      ) {
+        showStudyToast("Sharing PDF files is not supported by this browser.");
+        return;
+      }
+
+      await navigator.share({
+        files: [pdfFile],
+        title: "Fathiha study material",
+      });
+      showStudyToast("PDF shared successfully.");
+    } catch (shareError) {
+      if (shareError.name === "AbortError") {
+        return;
+      }
+
+      console.error("Study PDF sharing failed:", shareError);
+      showStudyToast("Unable to share the PDF. Please try downloading it.");
+    }
+  };
 
   // Handle input changes
   const handleChange = (event) => {
@@ -305,6 +372,15 @@ export default function LoadingPage() {
         </header>
 
         <section className="study-card" aria-labelledby="study-title">
+          {studyToastMessage && (
+            <div
+              className={`study-download-toast${studyToastVisible ? " is-visible" : ""}`}
+              role="status"
+              aria-live="polite"
+            >
+              {studyToastMessage}
+            </div>
+          )}
           <p className="study-eyebrow">STUDY MATERIAL</p>
           <h1 id="study-title">Prepare for the quiz</h1>
           <p className="study-intro">
@@ -359,11 +435,54 @@ export default function LoadingPage() {
               </div>
             </div>
           )}
-          <p className="study-protection-note">
-            The viewer hides its toolbar and blocks common save and print
-            shortcuts. Browsers and devices may still allow downloads or
-            screenshots.
-          </p>
+          {remainingSeconds !== 0 && (
+            <div className="study-download-section">
+              <a
+                className="study-download-button"
+                href="/Fathiha.pdf"
+                download="Fathiha.pdf"
+                onClick={() => showStudyToast("PDF downloading...")}
+              >
+                <svg
+                  className="study-action-icon"
+                  aria-hidden="true"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M12 3v12" />
+                  <path d="m7 10 5 5 5-5" />
+                  <path d="M5 17v3h14v-3" />
+                </svg>
+                Download PDF
+              </a>
+              <button
+                className="study-download-button study-share-button"
+                type="button"
+                onClick={handleShareStudyPdf}
+              >
+                <svg
+                  className="study-action-icon"
+                  aria-hidden="true"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <circle cx="18" cy="5" r="3" />
+                  <circle cx="6" cy="12" r="3" />
+                  <circle cx="18" cy="19" r="3" />
+                  <path d="m8.7 10.7 6.6-4.4M8.7 13.3l6.6 4.4" />
+                </svg>
+                Share PDF
+              </button>
+            </div>
+          )}
         </section>
       </main>
     );
