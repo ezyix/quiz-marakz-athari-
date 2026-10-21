@@ -883,7 +883,7 @@ export default function AdminPage() {
 								<path d="M12 3v12m-5-5 5 5 5-5" />
 								<path d="M5 17v3h14v-3" />
 							</svg>
-							data PDF
+								Data  PDF
 						</button>
 						<button className="clear-participants-button" type="button" onClick={() => setShowClearDataModal(true)} disabled={quizStarted || participantsDeleting || participants.length === 0} title={quizStarted ? "End the quiz before clearing participant data." : undefined}>
 							<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
