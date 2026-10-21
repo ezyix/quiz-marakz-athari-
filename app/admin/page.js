@@ -80,6 +80,26 @@ async function createParticipantsPdf(participants) {
 	const logoBase64 = logoCanvas.toDataURL("image/jpeg", 0.9).split(",")[1];
 	const logoBinary = atob(logoBase64);
 
+	const brandResponse = await fetch("/brand%20name.png");
+	if (!brandResponse.ok) {
+		throw new Error(`Brand name request failed with status ${brandResponse.status}.`);
+	}
+	const brandBitmap = await createImageBitmap(await brandResponse.blob());
+	const brandCanvas = document.createElement("canvas");
+	brandCanvas.width = 512;
+	brandCanvas.height = Math.round(brandCanvas.width * brandBitmap.height / brandBitmap.width);
+	const brandContext = brandCanvas.getContext("2d");
+	if (!brandContext) {
+		brandBitmap.close();
+		throw new Error("Unable to prepare the report brand name.");
+	}
+	brandContext.fillStyle = "#ffffff";
+	brandContext.fillRect(0, 0, brandCanvas.width, brandCanvas.height);
+	brandContext.drawImage(brandBitmap, 0, 0, brandCanvas.width, brandCanvas.height);
+	brandBitmap.close();
+	const brandBase64 = brandCanvas.toDataURL("image/jpeg", 0.9).split(",")[1];
+	const brandBinary = atob(brandBase64);
+
 	const toPdfText = (value) =>
 		String(value ?? "--")
 			.normalize("NFKD")
@@ -101,6 +121,8 @@ async function createParticipantsPdf(participants) {
 		{ label: "Time Taken", width: 100 },
 		{ label: "Started", width: 205 },
 	];
+	const brandDisplayWidth = 90;
+	const brandDisplayHeight = brandDisplayWidth * brandCanvas.height / brandCanvas.width;
 	const columnPositions = columns.reduce((positions) => {
 		const previousIndex = positions.length - 1;
 		const previousPosition = previousIndex < 0 ? 36 : positions[previousIndex];
@@ -124,43 +146,57 @@ async function createParticipantsPdf(participants) {
 		pages.push([]);
 	}
 
-	const pageObjectIds = pages.map((_, index) => 5 + index * 2);
+	const pageObjectIds = pages.map((_, index) => 6 + index * 2);
 	const objects = [
 		"<< /Type /Catalog /Pages 2 0 R >>",
 		`<< /Type /Pages /Kids [${pageObjectIds.map((id) => `${id} 0 R`).join(" ")}] /Count ${pages.length} >>`,
 		"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>",
 		`<< /Type /XObject /Subtype /Image /Width ${logoCanvas.width} /Height ${logoCanvas.height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${logoBinary.length} >>\nstream\n${logoBinary}\nendstream`,
+		`<< /Type /XObject /Subtype /Image /Width ${brandCanvas.width} /Height ${brandCanvas.height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${brandBinary.length} >>\nstream\n${brandBinary}\nendstream`,
 	];
 
 	pages.forEach((pageParticipants, index) => {
 		const pageId = pageObjectIds[index];
 		const contentId = pageId + 1;
-		const tableTop = 490;
+		const tableTop = 445;
 		const commands = [
+			"0.78 0.84 0.89 RG 0.8 w 20 10 802 575 re S",
 			"q",
-			"44 0 0 44 36 535 cm",
+			"30 0 0 30 36 544 cm",
 			"/Logo Do",
 			"Q",
+			"q",
+			`${brandDisplayWidth} 0 0 ${brandDisplayHeight} 76 ${544 + (30 - brandDisplayHeight) / 2} cm`,
+			"/Brand Do",
+			"Q",
+			"BT",
+			"/F1 9 Tf",
+			"0.40 0.51 0.58 rg",
+			`1 0 0 1 690 558 Tm`,
+			`(${toPdfText(reportDate)}) Tj`,
+			"ET",
 			"BT",
 			"/F1 15 Tf",
 			"0.09 0.20 0.29 rg",
-			"90 565 Td",
+			"36 510 Td",
 			"(Participant Data) Tj",
 			"/F1 9 Tf",
 			"0.40 0.51 0.58 rg",
-			"0 -16 Td",
-			`(Total participants: ${participants.length} | Page ${index + 1} of ${pages.length}) Tj`,
-			"ET",
-			"BT",
-			"/F1 9 Tf",
-			"0.40 0.51 0.58 rg",
-			`1 0 0 1 690 565 Tm`,
-			`(${toPdfText(reportDate)}) Tj`,
+			"0 -20 Td",
+			`(Total participants: ${participants.length}) Tj`,
 			"ET",
 			"0.22 0.50 0.81 rg",
 			`36 ${tableTop} ${columns.reduce((total, column) => total + column.width, 0)} 24 re f`,
 		];
 
+		commands.push(
+			"BT",
+			"/F1 8 Tf",
+			"0.40 0.51 0.58 rg",
+			`1 0 0 1 760 17 Tm`,
+			`(Page ${index + 1} of ${pages.length}) Tj`,
+			"ET"
+		);
 		commands.push("BT", "/F1 8 Tf", "1 1 1 rg");
 		columns.forEach((column, columnIndex) => {
 			commands.push(
@@ -226,7 +262,7 @@ async function createParticipantsPdf(participants) {
 		const pageText = commands.join("\n");
 
 		objects.push(
-			`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 842 595] /Resources << /Font << /F1 3 0 R >> /XObject << /Logo 4 0 R >> >> /Contents ${contentId} 0 R >>`,
+			`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 842 595] /Resources << /Font << /F1 3 0 R >> /XObject << /Logo 4 0 R /Brand 5 0 R >> >> /Contents ${contentId} 0 R >>`,
 			`<< /Length ${pageText.length} >>\nstream\n${pageText}\nendstream`
 		);
 	});
@@ -836,7 +872,7 @@ export default function AdminPage() {
 			{activeView === "leaderboard" ? (
 				<>
 					<div className="admin-actions">
-						<button type="button" onClick={loadParticipants} disabled={loading}>↻ Refresh</button>
+						<button className="refresh-participants-button" type="button" onClick={loadParticipants} disabled={loading}>↻ Refresh</button>
 						<button
 							type="button"
 							className="download-participants-pdf"
@@ -844,12 +880,17 @@ export default function AdminPage() {
 							disabled={loading || participants.length === 0}
 						>
 							<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-								<path d="M7 3h7l5 5v13H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z" />
-								<path d="M14 3v6h6M8 15h8m-8 3h8" />
+								<path d="M12 3v12m-5-5 5 5 5-5" />
+								<path d="M5 17v3h14v-3" />
 							</svg>
 							data PDF
 						</button>
-						<button className="clear-participants-button" type="button" onClick={() => setShowClearDataModal(true)} disabled={quizStarted || participantsDeleting || participants.length === 0} title={quizStarted ? "End the quiz before clearing participant data." : undefined}>{participantsDeleting ? "Clearing..." : "Clear data"}</button>
+						<button className="clear-participants-button" type="button" onClick={() => setShowClearDataModal(true)} disabled={quizStarted || participantsDeleting || participants.length === 0} title={quizStarted ? "End the quiz before clearing participant data." : undefined}>
+							<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+								<path d="M3 6h18m-2 0-.9 14H5.9L5 6m4 0V4h6v2m-5 4v6m4-6v6" />
+							</svg>
+							{participantsDeleting ? "Clearing..." : "Clear data"}
+						</button>
 					</div>
 					{error && <p className="admin-data-error">{error}</p>}
 					<section className="admin-stats">{stats.map(([label, value]) => <article className={`stat-card${label === "Kids" ? " kids-stat-card" : ""}`} key={label}><span>{label}</span>{loading ? <span className="admin-data-spinner" role="status" aria-label={`Loading ${label.toLowerCase()}`} /> : label !== "Kids" ? <strong>{value}</strong> : <div className="kids-gender-counts"><span className="kids-gender-badge male">M - <strong>{summary.kidsMale}</strong></span><span className="kids-gender-badge female">F - <strong>{summary.kidsFemale}</strong></span></div>}</article>)}</section>
@@ -878,7 +919,7 @@ export default function AdminPage() {
 							<p className="question-count">{questionsLoading ? <span className="admin-data-spinner" role="status" aria-label="Loading questions" /> : `Total - ${questions.length} Q`}</p>
 						</div>
 						<div className="question-panel-actions">
-							<div className="question-menu-container" ref={questionMenuRef}>
+							<div className={`question-menu-container${questionMenuOpen ? " is-open" : ""}`} ref={questionMenuRef}>
 								<button
 									className="admin-primary-button question-menu-trigger"
 									type="button"
@@ -895,14 +936,27 @@ export default function AdminPage() {
 									</svg>
 								</button>
 								{questionMenuOpen && (
-									<div className="question-actions-menu" id="question-actions-menu" aria-label="Question actions">
-										<button type="button" onClick={() => { setQuestionMenuOpen(false); setShowQuestionModal(true); }} disabled={quizStarted || questionDeletingAll}>
-											Add question
-										</button>
-										<button className="delete-all-questions-action" type="button" onClick={handleDeleteAllQuestions} disabled={!questions.length || quizStarted || questionDeletingAll}>
-											{questionDeletingAll ? "Deleting..." : "Delete all questions"}
-										</button>
-									</div>
+									<>
+										<div
+											className="question-actions-backdrop"
+											aria-hidden="true"
+											onPointerDown={() => setQuestionMenuOpen(false)}
+										/>
+										<div className="question-actions-menu" id="question-actions-menu" aria-label="Question actions">
+											<button type="button" onClick={() => { setQuestionMenuOpen(false); setShowQuestionModal(true); }} disabled={quizStarted || questionDeletingAll}>
+												<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+													<path d="M12 5v14M5 12h14" />
+												</svg>
+												Add question
+											</button>
+											<button className="delete-all-questions-action" type="button" onClick={handleDeleteAllQuestions} disabled={!questions.length || quizStarted || questionDeletingAll}>
+												<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+													<path d="M3 6h18m-2 0-.9 14H5.9L5 6m4 0V4h6v2m-5 4v6m4-6v6" />
+												</svg>
+												{questionDeletingAll ? "Deleting..." : "Delete all questions"}
+											</button>
+										</div>
+									</>
 								)}
 							</div>
 						</div>
@@ -1173,6 +1227,9 @@ export default function AdminPage() {
 						<div className="clear-data-actions">
 							<button className="clear-data-cancel" type="button" onClick={() => setShowClearDataModal(false)} disabled={participantsDeleting}>Cancel</button>
 							<button className="clear-data-confirm" type="button" onClick={handleClearParticipants} disabled={participantsDeleting}>
+								<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+									<path d="M3 6h18m-2 0-.9 14H5.9L5 6m4 0V4h6v2m-5 4v6m4-6v6" />
+								</svg>
 								{participantsDeleting ? "Clearing..." : "Clear data"}
 							</button>
 						</div>
