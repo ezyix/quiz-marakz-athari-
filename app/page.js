@@ -3,6 +3,7 @@
 import "./globals.css";
 import "./quiz/quiz.css";
 import "./study-material.css";
+import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
@@ -11,6 +12,15 @@ import {
   getCountryCallingCode,
   parsePhoneNumberFromString,
 } from "libphonenumber-js";
+
+const StudyPdfViewer = dynamic(() => import("./StudyPdfViewer"), {
+  ssr: false,
+  loading: () => (
+    <div className="study-pdf-loading" role="status">
+      Loading study material…
+    </div>
+  ),
+});
 
 const studyMaterialDeadline = new Date("2026-11-29T10:00:00+05:30").getTime();
 
@@ -424,13 +434,7 @@ export default function LoadingPage() {
                   Study material hidden
                 </div>
               )}
-              <iframe
-                className="study-pdf-viewer"
-                src="/Fathiha.pdf#toolbar=0&navpanes=0&scrollbar=0"
-                title="Fathiha study material"
-                referrerPolicy="no-referrer"
-              />
-
+              <StudyPdfViewer />
               <div className="study-watermark" aria-hidden="true">
                 AL-MARKAZUL-ATHARI · STUDY MATERIAL
               </div>
