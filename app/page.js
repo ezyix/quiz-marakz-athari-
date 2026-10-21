@@ -209,7 +209,7 @@ export default function LoadingPage() {
         files: [pdfFile],
         title: "Fathiha study material",
       });
-      showStudyToast("PDF shared successfully.");
+      showStudyToast("PDF sharing....");
     } catch (shareError) {
       if (shareError.name === "AbortError") {
         return;

@@ -847,7 +847,7 @@ export default function AdminPage() {
 								<path d="M7 3h7l5 5v13H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z" />
 								<path d="M14 3v6h6M8 15h8m-8 3h8" />
 							</svg>
-							Download data as PDF
+							data PDF
 						</button>
 						<button className="clear-participants-button" type="button" onClick={() => setShowClearDataModal(true)} disabled={quizStarted || participantsDeleting || participants.length === 0} title={quizStarted ? "End the quiz before clearing participant data." : undefined}>{participantsDeleting ? "Clearing..." : "Clear data"}</button>
 					</div>
