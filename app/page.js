@@ -2,6 +2,7 @@
 
 import "./globals.css";
 import "./quiz/quiz.css";
+import "./study-material.css";
 import { useEffect, useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
@@ -10,6 +11,8 @@ import {
   getCountryCallingCode,
   parsePhoneNumberFromString,
 } from "libphonenumber-js";
+
+const studyMaterialDeadline = new Date("2026-11-29T10:00:00+05:30").getTime();
 
 const primaryPhoneRegions = {
   "1": "US",
@@ -55,6 +58,8 @@ export default function LoadingPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [quizStarted, setQuizStarted] = useState(false);
+  const [remainingSeconds, setRemainingSeconds] = useState(null);
+  const [captureGuardActive, setCaptureGuardActive] = useState(false);
 
   const refreshQuizStatus = async () => {
     try {
@@ -98,6 +103,55 @@ export default function LoadingPage() {
       clearInterval(progressInterval);
     };
   }, []);
+
+  useEffect(() => {
+    let interval;
+
+    const updateCountdown = () => {
+      const seconds = Math.max(
+        0,
+        Math.ceil((studyMaterialDeadline - Date.now()) / 1000)
+      );
+      setRemainingSeconds(seconds);
+
+      if (seconds === 0) {
+        clearInterval(interval);
+      }
+    };
+
+    interval = setInterval(updateCountdown, 1000);
+    updateCountdown();
+
+    return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    if (loading || quizStarted) {
+      return;
+    }
+
+    let captureTimeout;
+
+    const handleStudyKeyDown = (event) => {
+      const key = event.key.toLowerCase();
+
+      if (event.key === "PrintScreen") {
+        setCaptureGuardActive(true);
+        clearTimeout(captureTimeout);
+        captureTimeout = setTimeout(() => setCaptureGuardActive(false), 1500);
+      }
+
+      if ((event.ctrlKey || event.metaKey) && ["s", "p", "u"].includes(key)) {
+        event.preventDefault();
+      }
+    };
+
+    window.addEventListener("keydown", handleStudyKeyDown, true);
+    return () => {
+      window.removeEventListener("keydown", handleStudyKeyDown, true);
+      clearTimeout(captureTimeout);
+    };
+  }, [loading, quizStarted]);
 
   // Handle input changes
   const handleChange = (event) => {
@@ -237,24 +291,79 @@ export default function LoadingPage() {
 
   if (!quizStarted) {
     return (
-      <main className="quiz-page welcome-page not-started-page">
-                <div>
-        <Image src="/logo.png" alt="logo" width="43" height="50" style={{ marginRight: "5px" }} /><Image src="/brand name.png" alt="Al Markazul Athari" width="130" height="40" />
+      <main
+        className="study-page"
+        onContextMenu={(event) => event.preventDefault()}
+        onDragStart={(event) => event.preventDefault()}
+      >
+        <header className="study-header">
+          <div className="study-brand">
+            <Image src="/logo.png" alt="Al Markazul Athari" width={48} height={55} />
+            <Image src="/brand name.png" alt="Al Markazul Athari" width={150} height={46} />
+          </div>
+          <p className="study-timezone">Kerala time (IST)</p>
+        </header>
+
+        <section className="study-card" aria-labelledby="study-title">
+          <p className="study-eyebrow">STUDY MATERIAL</p>
+          <h1 id="study-title">Prepare for the quiz</h1>
+          <p className="study-intro">
+            Review the material below before the quiz begins.
+          </p>
+
+          <div className="study-countdown" aria-live="polite">
+            <p className="study-countdown-label">Time remaining</p>
+            {remainingSeconds === null ? (
+              <p className="study-countdown-value">Loading timer…</p>
+            ) : remainingSeconds === 0 ? (
+              <p className="study-countdown-value">Study period has ended</p>
+            ) : (
+              <div className="study-countdown-units">
+                {[
+                  ["Days", Math.floor(remainingSeconds / 86400)],
+                  ["Hours", Math.floor((remainingSeconds % 86400) / 3600)],
+                  ["Minutes", Math.floor((remainingSeconds % 3600) / 60)],
+                  ["Seconds", remainingSeconds % 60],
+                ].map(([label, value]) => (
+                  <div className="study-countdown-unit" key={label}>
+                    <span>{String(value).padStart(2, "0")}</span>
+                    <small>{label}</small>
+                  </div>
+                ))}
+              </div>
+            )}
+            <p className="study-deadline">
+              Ends 29 November 2026 at 10:00 AM
+            </p>
+          </div>
+
+          {remainingSeconds === 0 ? (
+            <div className="study-expired" role="status">
+              The study-material period has ended.
+            </div>
+          ) : (
+            <div className="study-viewer-shell">
+              {captureGuardActive && (
+                <div className="study-capture-guard" role="status">
+                  Study material hidden
                 </div>
-
-        <section className="question-card welcome-card not-started-card" aria-labelledby="quiz-status-title">
-          <div className="donation-upi-row1">
-        <p className="textt">
-        السلام عليكم ورحمه الله وبركاته
-        </p>
-        <p className="texttp">
-          The quiz is not started yet.<br/> Please wait for the quiz to start.<br />
-        </p>
-        <p className="textt">
-            بارك الله فيك
-        </p>
-        </div>
-
+              )}
+              <iframe
+                className="study-pdf-viewer"
+                src="/Fathiha.pdf#toolbar=0&navpanes=0&scrollbar=0"
+                title="Fathiha study material"
+                referrerPolicy="no-referrer"
+              />
+              <div className="study-watermark" aria-hidden="true">
+                AL-MARKAZUL-ATHARI · STUDY MATERIAL
+              </div>
+            </div>
+          )}
+          <p className="study-protection-note">
+            The viewer hides its toolbar and blocks common save and print
+            shortcuts. Browsers and devices may still allow downloads or
+            screenshots.
+          </p>
         </section>
       </main>
     );
