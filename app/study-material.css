@@ -569,9 +569,9 @@
   }
 
   .study-viewer-shell {
-    height: 85vh;
-    height: 85dvh;
-    min-height: 420px;
+    height: 55px;
+    height: 55px;
+    min-height: 480px;
   }
 
   .study-pdf-document {
