@@ -17,7 +17,7 @@ const StudyPdfViewer = dynamic(() => import("./StudyPdfViewer"), {
   ssr: false,
   loading: () => (
     <div className="study-pdf-loading" role="status">
-      Loading study material…
+      
     </div>
   ),
 });
@@ -397,7 +397,13 @@ export default function LoadingPage() {
           </p>
 
           <div className="study-countdown" aria-live="polite">
-            <p className="study-countdown-label">Time remaining</p>
+            <p className="study-countdown-label">
+              <svg viewBox="0 0 48 48" aria-hidden="true">
+                <circle cx="24" cy="24" r="19" />
+                <path d="M24 13v12l9 5" />
+              </svg>
+              <span>Time remaining</span>
+            </p>
             {remainingSeconds === null ? (
               <p className="study-countdown-value">Loading timer…</p>
             ) : remainingSeconds === 0 ? (
@@ -405,12 +411,34 @@ export default function LoadingPage() {
             ) : (
               <div className="study-countdown-units">
                 {[
-                  ["Days", Math.floor(remainingSeconds / 86400)],
-                  ["Hours", Math.floor((remainingSeconds % 86400) / 3600)],
-                  ["Minutes", Math.floor((remainingSeconds % 3600) / 60)],
-                  ["Seconds", remainingSeconds % 60],
-                ].map(([label, value]) => (
-                  <div className="study-countdown-unit" key={label}>
+                  ["Days", Math.floor(remainingSeconds / 86400), "calendar"],
+                  ["Hours", Math.floor((remainingSeconds % 86400) / 3600), "clock"],
+                  ["Minutes", Math.floor((remainingSeconds % 3600) / 60), "stopwatch"],
+                  ["Seconds", remainingSeconds % 60, "fast"],
+                ].map(([label, value, unit]) => (
+                  <div
+                    className={`study-countdown-unit study-countdown-unit-${unit}`}
+                    key={label}
+                  >
+                    <span className="study-countdown-unit-icon" aria-hidden="true">
+                      {unit === "calendar" ? (
+                        <svg viewBox="0 0 32 32">
+                          <rect x="5" y="7" width="22" height="20" rx="3" />
+                          <path d="M10 4v6M22 4v6M5 13h22" />
+                        </svg>
+                      ) : unit === "clock" ? (
+                        <svg viewBox="0 0 32 32">
+                          <circle cx="16" cy="17" r="11" />
+                          <path d="M16 10v7l5 3" />
+                        </svg>
+                      ) : (
+                        <svg viewBox="0 0 32 32">
+                          <circle cx="16" cy="18" r="10" />
+                          <path d="M16 12v6l-3 3M13 4h6M16 4v4M23 9l2-2" />
+                          {unit === "fast" && <path d="M2 13h3M1 18h3M2 23h3" />}
+                        </svg>
+                      )}
+                    </span>
                     <span>{String(value).padStart(2, "0")}</span>
                     <small>{label}</small>
                   </div>
@@ -418,7 +446,13 @@ export default function LoadingPage() {
               </div>
             )}
             <p className="study-deadline">
-              Ends 29 November 2026 at 10:00 AM
+              <span className="study-deadline-rule" aria-hidden="true" />
+              <svg viewBox="0 0 32 32" aria-hidden="true">
+                <rect x="4" y="7" width="24" height="21" rx="4" />
+                <path d="M10 3v8M22 3v8M4 14h24M10 19h.01M16 19h.01M22 19h.01M10 24h.01M16 24h.01" />
+              </svg>
+              <span>Ends 29 November 2026 at 10:00 AM</span>
+              <span className="study-deadline-rule" aria-hidden="true" />
             </p>
           </div>
 

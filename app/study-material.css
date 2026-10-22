@@ -59,55 +59,205 @@
 }
 
 .study-countdown {
+  position: relative;
+  overflow: hidden;
   margin-bottom: 24px;
   padding: 18px;
-  border: 1px solid #dcebf7;
+  border: 1px solid #d8e8f6;
   border-radius: 16px;
-  background: #f5faff;
+  background: #f8fcff;
+  box-shadow: 0 14px 32px rgba(55, 126, 203, 0.1);
   text-align: center;
 }
 
+.study-countdown::before,
+.study-countdown::after {
+  position: absolute;
+  z-index: 0;
+  width: 100px;
+  height: 100px;
+  border-radius: 50%;
+  background: #d9eaff;
+  content: "";
+  pointer-events: none;
+}
+
+.study-countdown::before {
+  top: -78px;
+  left: -72px;
+}
+
+.study-countdown::after {
+  right: -72px;
+  bottom: -78px;
+}
+
 .study-countdown-label {
-  margin: 0 0 12px;
-  color: #6d8295;
-  font-size: 13px;
-  font-weight: 700;
+  position: relative;
+  z-index: 1;
+  display: flex;
+  width: fit-content;
+  margin: 0 auto 22px;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  color: #14294e;
+  font-size: clamp(20px, 3vw, 26px);
+  font-weight: 800;
+  line-height: 1.15;
+}
+
+.study-countdown-label::after {
+  position: absolute;
+  bottom: -10px;
+  left: 50%;
+  width: 88px;
+  height: 3px;
+  border-radius: 99px;
+  background: linear-gradient(90deg, #367ff0, #8bc5ff);
+  content: "";
+  transform: translateX(-50%);
+}
+
+.study-countdown-label svg {
+  width: 30px;
+  height: 30px;
+  flex: 0 0 auto;
+  fill: none;
+  stroke: #347ee8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 3;
 }
 
 .study-countdown-units {
-  display: flex;
-  justify-content: center;
-  gap: clamp(10px, 4vw, 36px);
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: clamp(8px, 2vw, 18px);
 }
 
 .study-countdown-unit {
   display: flex;
-  min-width: 52px;
+  min-width: 0;
+  min-height: 112px;
   flex-direction: column;
+  align-items: center;
+  justify-content: center;
   gap: 4px;
+  padding: 8px;
+  border: 1px solid transparent;
+  border-radius: 14px;
 }
 
-.study-countdown-unit span,
+.study-countdown-unit-calendar {
+  border-color: #d5e9fb;
+  background: #edf7ff;
+}
+
+.study-countdown-unit-clock {
+  border-color: #e2defb;
+  background: #f3f1ff;
+}
+
+.study-countdown-unit-stopwatch {
+  border-color: #d5f0e7;
+  background: #eefaf5;
+}
+
+.study-countdown-unit-fast {
+  border-color: #f5e7ce;
+  background: #fff8ec;
+}
+
+.study-countdown-unit-icon {
+  display: flex;
+  width: 42px;
+  height: 42px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  color: #fff;
+}
+
+.study-countdown-unit-calendar .study-countdown-unit-icon {
+  background: #4c91ed;
+}
+
+.study-countdown-unit-clock .study-countdown-unit-icon {
+  background: #7862e7;
+}
+
+.study-countdown-unit-stopwatch .study-countdown-unit-icon {
+  background: #49b993;
+}
+
+.study-countdown-unit-fast .study-countdown-unit-icon {
+  background: #f5a02d;
+}
+
+.study-countdown-unit-icon svg {
+  width: 24px;
+  height: 24px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2.2;
+}
+
+.study-countdown-unit > span:not(.study-countdown-unit-icon),
 .study-countdown-value {
-  color: #18324a;
-  font-size: clamp(20px, 4vw, 32px);
+  color: #14294e;
+  font-size: clamp(24px, 3vw, 32px);
   font-weight: 800;
   font-variant-numeric: tabular-nums;
+  line-height: 1;
 }
 
 .study-countdown-value {
+  position: relative;
+  z-index: 1;
   margin: 0;
+  padding: 12px 0;
 }
 
 .study-countdown-unit small {
-  color: #6d8295;
-  font-size: 11px;
+  color: #617695;
+  font-size: 13px;
+  font-weight: 600;
 }
 
 .study-deadline {
-  margin: 12px 0 0;
-  color: #6d8295;
-  font-size: 12px;
+  position: relative;
+  z-index: 1;
+  display: flex;
+  margin: 16px 0 0;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(8px, 2vw, 16px);
+  color: #536d94;
+  font-size: clamp(12px, 1.8vw, 15px);
+  font-weight: 600;
+}
+
+.study-deadline-rule {
+  height: 2px;
+  flex: 1 1 auto;
+  background: #d8e7f4;
+}
+
+.study-deadline svg {
+  width: 30px;
+  height: 30px;
+  flex: 0 0 auto;
+  fill: none;
+  stroke: #347ee8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2.5;
 }
 
 .study-viewer-shell {
@@ -156,6 +306,35 @@
   padding: 24px 12px;
   color: #6d8295;
   text-align: center;
+}
+
+.study-pdf-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+
+.study-pdf-loading::before {
+  width: 18px;
+  height: 18px;
+  border: 3px solid #d8e8f6;
+  border-top-color: #347ee8;
+  border-radius: 50%;
+  content: "";
+  animation: study-pdf-spin 700ms linear infinite;
+}
+
+@keyframes study-pdf-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .study-pdf-loading::before {
+    animation-duration: 1.8s;
+  }
 }
 
 .study-pdf-message a {
@@ -296,6 +475,87 @@
 
   .study-timezone {
     font-size: 12px;
+  }
+
+  .study-countdown {
+    padding: 14px;
+    border-radius: 16px;
+  }
+
+  .study-countdown::before,
+  .study-countdown::after {
+    width: 82px;
+    height: 82px;
+  }
+
+  .study-countdown::before {
+    top: -64px;
+    left: -60px;
+  }
+
+  .study-countdown::after {
+    right: -60px;
+    bottom: -64px;
+  }
+
+  .study-countdown-label {
+    gap: 7px;
+    margin-bottom: 20px;
+  }
+
+  .study-countdown-label::after {
+    bottom: -9px;
+    width: 76px;
+    height: 3px;
+  }
+
+  .study-countdown-units {
+    gap: 6px;
+  }
+
+  .study-countdown-unit {
+    min-height: 0;
+    gap: 2px;
+    padding: 6px 2px;
+    border-radius: 10px;
+  }
+
+  .study-countdown-unit-icon {
+    width: 26px;
+    height: 26px;
+  }
+
+  .study-countdown-unit-icon svg {
+    width: 17px;
+    height: 17px;
+  }
+
+  .study-countdown-unit > span:not(.study-countdown-unit-icon) {
+    font-size: clamp(18px, 5vw, 24px);
+  }
+
+  .study-countdown-unit small {
+    font-size: 10px;
+  }
+
+  .study-deadline {
+    flex-wrap: wrap;
+    gap: 7px;
+    margin-top: 14px;
+    font-size: 11px;
+  }
+
+  .study-deadline-rule {
+    display: none;
+  }
+
+  .study-deadline > span:not(.study-deadline-rule) {
+    min-width: 0;
+  }
+
+  .study-deadline svg {
+    width: 24px;
+    height: 24px;
   }
 
   .study-brand img:first-child {
