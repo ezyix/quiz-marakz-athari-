@@ -3,11 +3,26 @@ import { NextResponse } from "next/server";
 import connectDB from "../../../lib/mongodb";
 import Question from "../../../models/Question";
 import QuizState from "../../../models/QuizState";
+import { isAdminRequest, isSameOriginRequest } from "../../../lib/auth";
 
 const QUIZ_STATE_KEY = "global";
 
-export async function DELETE(_request, { params }) {
+export async function DELETE(request, { params }) {
   try {
+    if (!isSameOriginRequest(request)) {
+      return NextResponse.json(
+        { success: false, message: "Cross-origin request denied." },
+        { status: 403 }
+      );
+    }
+
+    if (!isAdminRequest(request)) {
+      return NextResponse.json(
+        { success: false, message: "Admin authentication required." },
+        { status: 401 }
+      );
+    }
+
     const { id } = await params;
 
     if (!mongoose.isValidObjectId(id)) {

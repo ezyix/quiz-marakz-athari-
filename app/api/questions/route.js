@@ -2,17 +2,39 @@ import { NextResponse } from "next/server";
 import connectDB from "../../lib/mongodb";
 import Question from "../../models/Question";
 import QuizState from "../../models/QuizState";
+import { isAdminRequest, isSameOriginRequest } from "../../lib/auth";
 
 const QUIZ_STATE_KEY = "global";
 
-export async function GET() {
+export async function GET(request) {
   try {
     await connectDB();
-    const questions = await Question.find({})
+    const isAdmin = isAdminRequest(request);
+    if (!isAdmin) {
+      const quizState = await QuizState.findOne({ key: QUIZ_STATE_KEY })
+        .select("isStarted")
+        .lean();
+
+      if (!quizState?.isStarted) {
+        return NextResponse.json(
+          { success: false, message: "The quiz is not available yet." },
+          { status: 409, headers: { "Cache-Control": "no-store" } }
+        );
+      }
+    }
+
+    const questionQuery = Question.find({});
+    if (!isAdmin) {
+      questionQuery.select("-answer");
+    }
+    const questions = await questionQuery
       .sort({ createdAt: 1, _id: 1 })
       .lean();
 
-    return NextResponse.json({ success: true, questions });
+    return NextResponse.json(
+      { success: true, questions },
+      { headers: { "Cache-Control": "no-store" } }
+    );
   } catch (error) {
     console.error("Question listing error:", error);
 
@@ -25,6 +47,20 @@ export async function GET() {
 
 export async function POST(request) {
   try {
+    if (!isSameOriginRequest(request)) {
+      return NextResponse.json(
+        { success: false, message: "Cross-origin request denied." },
+        { status: 403 }
+      );
+    }
+
+    if (!isAdminRequest(request)) {
+      return NextResponse.json(
+        { success: false, message: "Admin authentication required." },
+        { status: 401 }
+      );
+    }
+
     const body = await request.json();
     const question = typeof body.question === "string" ? body.question.trim() : "";
     const options = Array.isArray(body.options)
@@ -74,8 +110,22 @@ export async function POST(request) {
   }
 }
 
-export async function DELETE() {
+export async function DELETE(request) {
   try {
+    if (!isSameOriginRequest(request)) {
+      return NextResponse.json(
+        { success: false, message: "Cross-origin request denied." },
+        { status: 403 }
+      );
+    }
+
+    if (!isAdminRequest(request)) {
+      return NextResponse.json(
+        { success: false, message: "Admin authentication required." },
+        { status: 401 }
+      );
+    }
+
     await connectDB();
     const quizState = await QuizState.findOne({ key: QUIZ_STATE_KEY })
       .select("isStarted")

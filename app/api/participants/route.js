@@ -1,7 +1,17 @@
 import { NextResponse } from "next/server";
 import connectDB from "../../lib/mongodb";
 import Participant from "../../models/Participant";
+import Question from "../../models/Question";
 import QuizState from "../../models/QuizState";
+import {
+  PARTICIPANT_COOKIE,
+  createParticipantSession,
+  getParticipantId,
+  isAdminRequest,
+  isSameOriginRequest,
+  participantSessionMaxAge,
+  sessionCookieOptions,
+} from "../../lib/auth";
 import {
   getCountries,
   parsePhoneNumberFromString,
@@ -14,8 +24,15 @@ const QUIZ_STATE_KEY = "global";
 // List participants and dashboard summary
 // ==========================================
 
-export async function GET() {
+export async function GET(request) {
   try {
+    if (!isAdminRequest(request)) {
+      return NextResponse.json(
+        { success: false, message: "Admin authentication required." },
+        { status: 401 }
+      );
+    }
+
     await connectDB();
 
     const participants = await Participant.find({})
@@ -68,7 +85,7 @@ export async function GET() {
         completed: completed.length,
         fastestFinish,
       },
-    });
+    }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     console.error("Participant listing error:", error);
 
@@ -90,7 +107,24 @@ export async function GET() {
 
 export async function POST(request) {
   try {
+    if (!isSameOriginRequest(request)) {
+      return NextResponse.json(
+        { success: false, message: "Cross-origin request denied." },
+        { status: 403 }
+      );
+    }
+
     await connectDB();
+
+    const quizState = await QuizState.findOne({ key: QUIZ_STATE_KEY })
+      .select("isStarted")
+      .lean();
+    if (!quizState?.isStarted) {
+      return NextResponse.json(
+        { success: false, message: "Registration is closed." },
+        { status: 409 }
+      );
+    }
 
     const body = await request.json();
 
@@ -191,6 +225,7 @@ export async function POST(request) {
         .toString(36)
         .substring(2, 8)
         .toUpperCase()}`;
+    const participantToken = createParticipantSession(participantId);
 
     // Create participant
 
@@ -205,7 +240,7 @@ export async function POST(request) {
         startedAt: new Date(),
       });
 
-    return NextResponse.json(
+    const response = NextResponse.json(
       {
         success: true,
         message: "Participant registered successfully.",
@@ -214,12 +249,6 @@ export async function POST(request) {
             participant.participantId,
           fullName:
             participant.fullName,
-          gender:
-            participant.gender,
-          age:
-            participant.age,
-          whatsapp:
-            participant.whatsapp,
           status:
             participant.status,
           startedAt:
@@ -230,6 +259,14 @@ export async function POST(request) {
         status: 201,
       }
     );
+
+    response.cookies.set(
+      PARTICIPANT_COOKIE,
+      participantToken,
+      sessionCookieOptions(participantSessionMaxAge)
+    );
+
+    return response;
   } catch (error) {
     if (error.code === 11000) {
       return NextResponse.json(
@@ -263,28 +300,47 @@ export async function POST(request) {
 
 export async function PATCH(request) {
   try {
-    await connectDB();
-
-    const body = await request.json();
-
-    const {
-      participantId,
-      score,
-      totalQuestions,
-    } = body;
-
-    if (!participantId) {
+    if (!isSameOriginRequest(request)) {
       return NextResponse.json(
-        {
-          success: false,
-          message: "Participant ID is required.",
-        },
-        {
-          status: 400,
-        }
+        { success: false, message: "Cross-origin request denied." },
+        { status: 403 }
       );
     }
 
+    const participantId = getParticipantId(request);
+    if (!participantId) {
+      return NextResponse.json(
+        { success: false, message: "Participant session required." },
+        { status: 401 }
+      );
+    }
+
+    const body = await request.json();
+    if (!Array.isArray(body?.answers) || body.answers.length > 500) {
+      return NextResponse.json(
+        { success: false, message: "Invalid quiz answers." },
+        { status: 400 }
+      );
+    }
+
+    const submittedAnswers = new Map();
+    for (const answer of body.answers) {
+      if (
+        !answer ||
+        typeof answer.questionId !== "string" ||
+        typeof answer.answer !== "string" ||
+        submittedAnswers.has(answer.questionId)
+      ) {
+        return NextResponse.json(
+          { success: false, message: "Invalid quiz answers." },
+          { status: 400 }
+        );
+      }
+
+      submittedAnswers.set(answer.questionId, answer.answer);
+    }
+
+    await connectDB();
     const participant =
       await Participant.findOne({
         participantId,
@@ -302,21 +358,37 @@ export async function PATCH(request) {
       );
     }
 
+    if (participant.status === "completed") {
+      return NextResponse.json(
+        { success: false, message: "This quiz has already been submitted." },
+        { status: 409 }
+      );
+    }
+
+    const questions = await Question.find({})
+      .select("answer")
+      .lean();
+    if (!questions.length) {
+      return NextResponse.json(
+        { success: false, message: "The quiz has no questions." },
+        { status: 409 }
+      );
+    }
+
+    const score = questions.reduce((total, question) => {
+      return submittedAnswers.get(String(question._id)) === question.answer
+        ? total + 1
+        : total;
+    }, 0);
+
     participant.status = "completed";
     participant.completedAt = new Date();
-
-    if (score !== undefined) {
-      participant.score = Number(score);
-    }
-
-    if (totalQuestions !== undefined) {
-      participant.totalQuestions =
-        Number(totalQuestions);
-    }
+    participant.score = score;
+    participant.totalQuestions = questions.length;
 
     await participant.save();
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       success: true,
       message: "Quiz completed successfully.",
       participant: {
@@ -332,6 +404,16 @@ export async function PATCH(request) {
           participant.completedAt,
       },
     });
+
+    response.cookies.set(PARTICIPANT_COOKIE, "", {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "strict",
+      path: "/",
+      maxAge: 0,
+    });
+
+    return response;
   } catch (error) {
     console.error(
       "Quiz completion error:",
@@ -350,8 +432,22 @@ export async function PATCH(request) {
   }
 }
 
-export async function DELETE() {
+export async function DELETE(request) {
   try {
+    if (!isSameOriginRequest(request)) {
+      return NextResponse.json(
+        { success: false, message: "Cross-origin request denied." },
+        { status: 403 }
+      );
+    }
+
+    if (!isAdminRequest(request)) {
+      return NextResponse.json(
+        { success: false, message: "Admin authentication required." },
+        { status: 401 }
+      );
+    }
+
     await connectDB();
     const quizState = await QuizState.findOne({ key: QUIZ_STATE_KEY })
       .select("isStarted")

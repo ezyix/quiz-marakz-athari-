@@ -313,45 +313,6 @@ function QuizPageContent() {
   };
 
   // ==========================================
-  // Calculate score
-  // ==========================================
-
-  const calculateScore = () => {
-    let finalScore = 0;
-
-    questions.forEach(
-      (question, index) => {
-        if (
-          answers[index] ===
-          question.answer
-        ) {
-          finalScore++;
-        }
-      }
-    );
-
-    // Include currently selected answer
-    const lastAnswer = selectedAnswer;
-
-    if (
-      currentQuestion ===
-      questions.length - 1
-    ) {
-      if (
-        lastAnswer &&
-        lastAnswer ===
-          questions[currentQuestion].answer &&
-        answers[currentQuestion] !==
-          lastAnswer
-      ) {
-        finalScore++;
-      }
-    }
-
-    return finalScore;
-  };
-
-  // ==========================================
   // Finish quiz
   // ==========================================
 
@@ -369,21 +330,6 @@ function QuizPageContent() {
         [currentQuestion]: selectedAnswer,
       };
 
-      let finalScore = 0;
-
-      questions.forEach(
-        (question, index) => {
-          if (
-            finalAnswers[index] ===
-            question.answer
-          ) {
-            finalScore++;
-          }
-        }
-      );
-
-      setScore(finalScore);
-
       const response = await fetch(
         "/api/participants",
         {
@@ -393,10 +339,11 @@ function QuizPageContent() {
               "application/json",
           },
           body: JSON.stringify({
-            participantId,
-            score: finalScore,
-            totalQuestions:
-              questions.length,
+            answers: questions.flatMap((question, index) =>
+              typeof finalAnswers[index] === "string"
+                ? [{ questionId: question._id, answer: finalAnswers[index] }]
+                : []
+            ),
           }),
         }
       );
@@ -409,6 +356,8 @@ function QuizPageContent() {
             "Failed to submit quiz."
         );
       }
+
+      setScore(data.participant.score);
 
       // Update local storage
       const savedParticipant =
@@ -423,14 +372,7 @@ function QuizPageContent() {
         updatedParticipant.status =
           "completed";
 
-        updatedParticipant.score =
-          finalScore;
-
-        updatedParticipant.totalQuestions =
-          questions.length;
-
-        updatedParticipant.completedAt =
-          new Date().toISOString();
+        updatedParticipant.status = "completed";
 
         localStorage.setItem(
           "quizParticipant",

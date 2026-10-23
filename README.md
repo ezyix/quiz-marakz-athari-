@@ -20,6 +20,26 @@ You can start editing the page by modifying `app/page.js`. The page auto-updates
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
+## Environment configuration
+
+Set these variables in `.env` for local development and in your hosting provider's secret settings for deployment:
+
+```env
+MONGODB_URI=
+ADMIN_EMAIL=
+ADMIN_PASSWORD=
+ADMIN_SESSION_SECRET=
+PARTICIPANT_SESSION_SECRET=
+```
+
+Use an admin password with at least 5 characters and unique random secrets of at least 32 characters for both session secrets. Generate each session secret independently with:
+
+```bash
+node -e "console.log(require('node:crypto').randomBytes(48).toString('base64url'))"
+```
+
+Do not commit `.env` or share these values. The admin login is unavailable until its credentials and session secret are configured. Participant registration and quiz submission also require `PARTICIPANT_SESSION_SECRET`.
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:

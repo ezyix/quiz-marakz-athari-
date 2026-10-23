@@ -94,7 +94,22 @@
 .participant-whatsapp svg { color: var(--success); }
 .participant-name { display: flex; align-items: center; gap: 6px; text-transform: uppercase; }
 .participant-name svg { flex: 0 0 16px; color: var(--primary-dark); }
-.leaderboard-filters { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 18px; }.leaderboard-filter { padding: 9px 16px; border: 1px solid var(--line); border-radius: 999px; background: var(--white); color: var(--ink); font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }.leaderboard-filter.active { border-color: var(--primary); background: var(--primary-light); color: var(--primary-dark); }
+.participants-panel .participant-filter-tabs { width: fit-content; max-width: 100%; flex-wrap: wrap; margin: 0 0 18px;  background: var(--white);}
+@media (max-width: 600px) {
+  .participants-panel .participant-filter-tabs {
+    display: grid;
+    width: 100%;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 2px;
+  }
+
+  .participants-panel .participant-filter-tabs .admin-tab {
+    min-width: 0;
+    padding: 8px 2px;
+    font-size: 10px;
+    white-space: nowrap;
+  }
+}
 .questions-list { display: grid; gap: 18px; }
 .question-count { margin: 0; color: var(--ink); font-size: 13px; font-weight: 700; }
 .question-panel-actions { display: flex; align-items: center; gap: 14px; }

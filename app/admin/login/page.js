@@ -4,10 +4,7 @@ import { useEffect, useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import "../admin.css";
-import { getAdminSession, saveAdminSession } from "../session";
-
-const ADMIN_EMAIL = "admin@markazul.athari.com";
-const ADMIN_PASSWORD = "10044";
+import { getAdminSession } from "../session";
 
 export default function AdminLoginPage() {
   const router = useRouter();
@@ -17,23 +14,41 @@ export default function AdminLoginPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
-    if (getAdminSession()) {
-      router.replace("/admin");
-    }
+    let cancelled = false;
+    getAdminSession().then((authenticated) => {
+      if (authenticated && !cancelled) {
+        router.replace("/admin");
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
   }, [router]);
 
-  const handleLogin = (event) => {
+  const handleLogin = async (event) => {
     event.preventDefault();
-
-    if (email.trim().toLowerCase() !== ADMIN_EMAIL || password !== ADMIN_PASSWORD) {
-      setLoginError("Incorrect email or password.");
-      return;
-    }
-
     setLoginError("");
     setIsSubmitting(true);
-    saveAdminSession();
-    router.replace("/admin");
+
+    try {
+      const response = await fetch("/api/admin/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || "Unable to sign in.");
+      }
+
+      router.replace("/admin");
+    } catch (error) {
+      setLoginError(error.message || "Unable to sign in.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import connectDB from "../../lib/mongodb";
 import Question from "../../models/Question";
 import QuizState from "../../models/QuizState";
+import { isAdminRequest, isSameOriginRequest } from "../../lib/auth";
 
 const QUIZ_STATE_KEY = "global";
 
@@ -31,6 +32,20 @@ export async function GET() {
 
 export async function PATCH(request) {
   try {
+    if (!isSameOriginRequest(request)) {
+      return NextResponse.json(
+        { success: false, message: "Cross-origin request denied." },
+        { status: 403 }
+      );
+    }
+
+    if (!isAdminRequest(request)) {
+      return NextResponse.json(
+        { success: false, message: "Admin authentication required." },
+        { status: 401 }
+      );
+    }
+
     const requestBody = await request.json();
     const body = requestBody && typeof requestBody === "object" ? requestBody : {};
     const hasStartedUpdate = Object.prototype.hasOwnProperty.call(body, "isStarted");
