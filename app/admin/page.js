@@ -59,6 +59,43 @@ function getTimeTaken(startedAt, completedAt) {
 	return "In progress";
 }
 
+function compareLeaderboardParticipants(first, second) {
+	const firstCompleted = first.status === "completed";
+	const secondCompleted = second.status === "completed";
+
+	if (firstCompleted !== secondCompleted) {
+		return firstCompleted ? -1 : 1;
+	}
+
+	if (!firstCompleted) {
+		return 0;
+	}
+
+	const getScoreRate = (participant) => {
+		const score = Number(participant.score);
+		const totalQuestions = Number(participant.totalQuestions);
+		return Number.isFinite(score) && Number.isFinite(totalQuestions) && totalQuestions > 0
+			? score / totalQuestions
+			: 0;
+	};
+	const scoreDifference = getScoreRate(second) - getScoreRate(first);
+
+	if (scoreDifference !== 0) {
+		return scoreDifference;
+	}
+
+	const getCompletionDuration = (participant) => {
+		const start = new Date(participant.startedAt).getTime();
+		const end = new Date(participant.completedAt).getTime();
+		return Number.isFinite(start) && Number.isFinite(end) && end >= start
+			? end - start
+			: Number.POSITIVE_INFINITY;
+	};
+
+	const durationDifference = getCompletionDuration(first) - getCompletionDuration(second);
+	return Number.isNaN(durationDifference) ? 0 : durationDifference;
+}
+
 async function createParticipantsPdf(participants) {
 	const logoResponse = await fetch("/logo.png");
 	if (!logoResponse.ok) {
@@ -804,25 +841,27 @@ export default function AdminPage() {
 		["kidsFemale", "Kids female participants"],
 	];
 
-	const getLeaderboardParticipants = (group) => participants.filter((participant) => {
-		if (group === "kidsMale") {
-			return Number(participant.age) < 13 && participant.gender === "Male";
-		}
+	const getLeaderboardParticipants = (group) => participants
+		.filter((participant) => {
+			if (group === "kidsMale") {
+				return Number(participant.age) < 13 && participant.gender === "Male";
+			}
 
-		if (group === "kidsFemale") {
-			return Number(participant.age) < 13 && participant.gender === "Female";
-		}
+			if (group === "kidsFemale") {
+				return Number(participant.age) < 13 && participant.gender === "Female";
+			}
 
-		if (group === "male") {
-			return participant.gender === "Male" && Number(participant.age) >= 13;
-		}
+			if (group === "male") {
+				return participant.gender === "Male" && Number(participant.age) >= 13;
+			}
 
-		if (group === "female") {
-			return participant.gender === "Female" && Number(participant.age) >= 13;
-		}
+			if (group === "female") {
+				return participant.gender === "Female" && Number(participant.age) >= 13;
+			}
 
-		return true;
-	});
+			return true;
+		})
+		.sort(compareLeaderboardParticipants);
 
 	return (
 		<main className="admin-page">
@@ -963,13 +1002,26 @@ export default function AdminPage() {
 					</div>
 					<form className="timer-settings-panel" onSubmit={handleSaveDuration}>
 						<div className="timer-settings-heading">
-							<p className="admin-kicker">QUIZ TIMER</p>
-							<h2>Quiz duration</h2>
+							<span className="timer-icon-wrap" aria-hidden="true">
+								<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+									<path d="M20 5h8M24 5v5M37.5 13.5l3-3M24 14v12l8 5M13 14H7m6 8H4m9 8H7" />
+									<circle cx="24" cy="27" r="14" />
+								</svg>
+							</span>
+							<div className="timer-settings-title">
+								<p className="admin-kicker">QUIZ TIMER</p>
+								<h2>Quiz duration</h2>
+							</div>
 						</div>
 						<div className="timer-settings-controls">
-
 							<div className="timer-duration-field">
-								<label htmlFor="quiz-duration">Time limit</label>
+								<label htmlFor="quiz-duration">
+									<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+										<circle cx="12" cy="12" r="9" />
+										<path d="M12 7v5l3 2" />
+									</svg>
+									Time limit
+								</label>
 								<div className="timer-duration-input">
 									<input
 										id="quiz-duration"
@@ -990,6 +1042,10 @@ export default function AdminPage() {
 								</div>
 							</div>
 							<button className="admin-primary-button timer-save-button" type="submit" disabled={quizStarted || durationSaving || !durationMinutes}>
+								<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+									<path d="M5 3h12l4 4v14H3V3h2z" />
+									<path d="M7 3v6h10V3M7 21v-8h10v8" />
+								</svg>
 								{durationSaving ? "Saving..." : durationSaved ? "Saved" : "Save time"}
 							</button>
 						</div>

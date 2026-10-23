@@ -31,7 +31,8 @@
 }
 
 
-.admin-login-page { display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 12px; padding: 24px; }
+.admin-login-page { display: flex; flex-direction: column; align-items: flex-start; justify-content: flex-start; gap: 12px; padding: 24px; }
+.admin-login-page .admin-header { margin-left: 0; margin-right: 0;  }
 .admin-login-card-logo { width: min(430px, 100%);  }
 .admin-login-card {width: min(430px, 100%); padding: 44px; background: rgba(255,255,255,.94); border: 1px solid var(--line); border-radius: 20px; box-shadow: var(--shadow-lg); }
 .admin-mark, .admin-brand-mark { display: grid;}
@@ -113,41 +114,52 @@
 .question-actions-menu .delete-all-questions-action { background: #ed9696; color: var(--white); }
 .question-actions-menu .delete-all-questions-action:hover:not(:disabled) { background: #df7777; }
 .question-management-lockout { margin: 0 0 16px; padding: 12px 14px; border-radius: 8px; background: var(--primary-light); color: var(--primary-dark); font-size: 13px; font-weight: 600; }
-.timer-settings-panel { display: grid; grid-template-columns: minmax(150px, 1fr) auto; align-items: center; gap: 16px 24px; margin: 0 0 20px; padding: 18px; border: 1px solid var(--border); border-radius: 12px; background: var(--background); }
-.timer-settings-heading .admin-kicker { margin-bottom: 5px; }
-.timer-settings-heading h2 { margin: 0; font-family: "Space Grotesk", sans-serif; font-size: 19px; }
-.timer-settings-controls { display: grid; grid-template-columns: minmax(92px, 1fr) minmax(125px, auto) auto; align-items: end; gap: 16px; }
+.timer-settings-panel { position: relative; display: grid; grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr); align-items: center; gap: 22px; margin: 0 0 20px; padding: 18px 20px; overflow: hidden; border: 1px solid #dcebf7; border-radius: 18px; background: radial-gradient(ellipse 105px 82px at 0 0, rgba(190, 222, 250, .78) 0 67%, transparent 69%), radial-gradient(ellipse 105px 82px at 100% 100%, rgba(190, 222, 250, .78) 0 67%, transparent 69%), linear-gradient(135deg, #fbfdff, #f5faff); box-shadow: 0 12px 30px rgba(44, 108, 160, .09); }
+.timer-settings-heading, .timer-settings-controls { position: relative; z-index: 1; }
+.timer-settings-heading { display: flex; min-width: 0; align-items: center; gap: 14px; padding-right: 20px; border-right: 1px solid #dcebf7; }
+.timer-icon-wrap { display: grid; width: 54px; height: 54px; flex: 0 0 54px; place-items: center; border-radius: 50%; background: #e5f2ff; color: #2781df; }
+.timer-icon-wrap svg { width: 39px; height: 39px; }
+.timer-settings-heading .admin-kicker { margin: 0 0 5px; color: #3989dc; font-size: 11px; letter-spacing: 1.4px; }
+.timer-settings-heading .admin-kicker::after { display: block; width: 42px; height: 2px; margin-top: 6px; border-radius: 2px; background: linear-gradient(90deg, #3189e9, #c6e2ff); content: ""; }
+.timer-settings-heading h2 { margin: 0; color: #18324a; font-family: "Space Grotesk", sans-serif; font-size: 19px; }
+.timer-settings-controls { display: flex; min-width: 0; align-items: center; justify-content: space-between; gap: 14px; }
 .timer-question-count { display: grid; gap: 3px; min-width: 105px; }
 .timer-question-count span, .timer-duration-field > label { color: var(--muted); font-size: 12px; font-weight: 700; }
 .timer-question-count strong { font-family: "Space Grotesk", sans-serif; font-size: 22px; }
-.timer-duration-field { display: grid; gap: 5px; }
-.timer-duration-input { display: flex; align-items: center; gap: 8px; }
-.timer-duration-input input { width: 92px; height: 42px; padding: 0 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--white); color: var(--ink); font: inherit; }
-.timer-duration-input span { color: var(--muted); font-size: 12px; }
-.timer-save-button { height: 42px; min-height: 42px; margin: 0; padding: 0 14px; background: var(--primary-dark); color: var(--white); white-space: nowrap; }
+.timer-duration-field { display: grid; min-width: 0; gap: 5px; }
+.timer-duration-field > label { display: flex; align-items: center; gap: 7px; font-size: 13px; }
+.timer-duration-field > label svg { width: 18px; height: 18px; flex: 0 0 auto; color: #6d8295; }
+.timer-duration-input { display: flex; align-items: center; gap: 9px; }
+.timer-duration-input input { box-sizing: border-box; width: 76px; height: 46px; padding: 0 10px; border: 1px solid var(--border); border-radius: 10px; background: var(--white); color: var(--ink); font: 700 19px "Space Grotesk", sans-serif; }
+.timer-duration-input input:focus-visible { border-color: var(--primary); outline: 3px solid rgba(91, 159, 232, .16); }
+.timer-duration-input span { color: var(--muted); font-size: 13px; white-space: nowrap; }
+.timer-save-button { display: inline-flex; height: 46px; min-height: 46px; align-items: center; justify-content: center; gap: 9px; margin: 0; padding: 0 16px; border: 0; border-radius: 12px; background: linear-gradient(135deg, #3189e9, #2378d8); color: var(--white); white-space: nowrap; box-shadow: 0 7px 16px rgba(35, 120, 216, .2); }
+.timer-save-button:hover:not(:disabled) { background: linear-gradient(135deg, #287edc, #1d6dc6); }
+.timer-save-button svg { width: 19px; height: 19px; flex: 0 0 auto; }
 .timer-settings-panel > .question-management-lockout, .timer-settings-panel > .admin-form-error { grid-column: 1 / -1; margin: 0; }
-@media (max-width: 600px) {
-  .timer-settings-panel { grid-template-columns: minmax(0, .85fr) minmax(0, 1.15fr); gap: 8px; padding: 10px; }
-  .timer-settings-heading { min-width: 0; }
-  .timer-settings-heading h2 { font-size: 16px; }
-  .timer-settings-controls { min-width: 0; grid-template-columns: minmax(0, 1fr) auto; gap: 6px; }
+@media (max-width: 760px) {
+  .timer-settings-panel { grid-template-columns: 1fr; gap: 12px; padding: 14px; }
+  .timer-settings-heading { gap: 10px; padding: 0 0 12px; border-right: 0; border-bottom: 1px solid #dcebf7; }
+  .timer-icon-wrap { width: 44px; height: 44px; flex-basis: 44px; }
+  .timer-icon-wrap svg { width: 32px; height: 32px; }
+  .timer-settings-heading h2 { font-size: 17px; }
+  .timer-settings-controls { justify-content: space-between; gap: 8px; }
   .timer-question-count strong { font-size: 20px; }
   .timer-duration-field { min-width: 0; }
   .timer-duration-field > label { font-size: 11px; }
-  .timer-duration-input { gap: 4px; }
-  .timer-duration-input input { width: 52px; box-sizing: border-box; }
-  .timer-duration-input span { font-size: 10px; white-space: nowrap; }
-  .timer-save-button { padding: 0 8px; font-size: 11px; }
+  .timer-duration-field > label svg { width: 15px; height: 15px; }
+  .timer-duration-input { gap: 5px; }
+  .timer-duration-input input { width: 62px; height: 42px; font-size: 16px; }
+  .timer-duration-input span { font-size: 11px; }
+  .timer-save-button { height: 42px; min-height: 42px; gap: 6px; padding: 0 11px; font-size: 11px; }
+  .timer-save-button svg { width: 16px; height: 16px; }
 }
 @media (max-width: 360px) {
-  .timer-settings-panel { grid-template-columns: 60px minmax(0, 1fr); gap: 6px; padding: 8px; }
-  .timer-settings-heading .admin-kicker { font-size: 8px; letter-spacing: .5px; }
-  .timer-settings-heading h2 { font-size: 14px; overflow-wrap: anywhere; }
-  .timer-settings-controls { gap: 4px; }
-  .timer-duration-field > label { font-size: 10px; }
-  .timer-duration-input input { width: 42px; padding: 0 6px; }
-  .timer-duration-input span { font-size: 9px; }
-  .timer-save-button { padding: 0 6px; font-size: 10px; }
+  .timer-settings-panel { padding: 12px 10px; }
+  .timer-settings-controls { gap: 5px; }
+  .timer-duration-input input { width: 52px; padding: 0 6px; }
+  .timer-duration-input span { font-size: 10px; }
+  .timer-save-button { gap: 4px; padding: 0 8px; font-size: 10px; }
 }
 .question-modal-backdrop { position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; padding: 20px; background: rgba(16, 34, 49, .52); backdrop-filter: blur(3px); }
 .question-modal { width: min(640px, 100%); max-height: min(760px, calc(100vh - 40px)); overflow-y: auto; padding: 24px; border: 1px solid var(--border); border-radius: 16px; background: var(--white); box-shadow: var(--shadow-lg); }
