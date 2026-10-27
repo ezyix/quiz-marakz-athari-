@@ -897,7 +897,7 @@ export default function AdminPage() {
 						disabled={isSigningOut}
 						aria-label={isSigningOut ? "Signing out" : undefined}
 					>
-						{isSigningOut ? <span className="admin-spinner" role="status" aria-label="Signing out" /> : "Sign out"}
+						{isSigningOut ? <span className="admin-loading-dots" aria-hidden="true"><span /><span /><span /></span> : "Sign out"}
 					</button>
 				</div>
 			</header>
@@ -919,11 +919,11 @@ export default function AdminPage() {
 			<section className="admin-live-banner">
 				<div className="live-copy"><span className="live-dot" /><div><strong>{quizStarted ? "Quiz is LIVE" : "Quiz not started"}</strong><span>{quizStarted ? "Attendees can register and take the quiz now." : questions.length === 0 ? "Add at least one question before starting the quiz." : "Press Start to open the quiz for participants."}</span></div></div>
 				<div className="live-actions">
-					<button className="started-pill" type="button" onClick={handleStartQuiz} disabled={quizStarted || statusUpdating || questions.length === 0} title={questions.length === 0 ? "Add at least one question before starting" : undefined}>
-						{quizStarted ? "Started" : "Start"}
+					<button className="started-pill" type="button" onClick={handleStartQuiz} disabled={quizStarted || statusUpdating || questions.length === 0} title={questions.length === 0 ? "Add at least one question before starting" : undefined} aria-label={statusUpdating && !quizStarted ? "Starting quiz" : undefined}>
+						{statusUpdating && !quizStarted ? <span className="admin-loading-dots" aria-hidden="true"><span /><span /><span /></span> : quizStarted ? "Started" : "Start"}
 					</button>
-					<button className="end-quiz-button" type="button" onClick={handleEndQuiz} disabled={!quizStarted || statusUpdating}>
-						End
+					<button className="end-quiz-button" type="button" onClick={handleEndQuiz} disabled={!quizStarted || statusUpdating} aria-label={statusUpdating && quizStarted ? "Finishing quiz" : undefined}>
+						{statusUpdating && quizStarted ? <span className="admin-loading-dots" aria-hidden="true"><span /><span /><span /></span> : "End"}
 					</button>
 				</div>
 			</section>
@@ -952,7 +952,7 @@ export default function AdminPage() {
 						</button>
 					</div>
 					{error && <p className="admin-data-error">{error}</p>}
-					<section className="admin-stats">{stats.map(([label, value]) => <article className={`stat-card${label === "Kids" ? " kids-stat-card" : ""}`} key={label}><span>{label}</span>{loading ? <span className="admin-data-spinner" role="status" aria-label={`Loading ${label.toLowerCase()}`} /> : label !== "Kids" ? <strong>{value}</strong> : <div className="kids-gender-counts"><span className="kids-gender-badge male">M - <strong>{summary.kidsMale}</strong></span><span className="kids-gender-badge female">F - <strong>{summary.kidsFemale}</strong></span></div>}</article>)}</section>
+					<section className="admin-stats">{stats.map(([label, value]) => <article className={`stat-card${label === "Kids" ? " kids-stat-card" : ""}`} key={label}><span>{label}</span>{loading ? <span className="admin-loading-dots" role="status" aria-label={`Loading ${label.toLowerCase()}`}><span /><span /><span /></span> : label !== "Kids" ? <strong>{value}</strong> : <div className="kids-gender-counts"><span className="kids-gender-badge male">M - <strong>{summary.kidsMale}</strong></span><span className="kids-gender-badge female">F - <strong>{summary.kidsFemale}</strong></span></div>}</article>)}</section>
 					{leaderboardSections.filter(([group]) => group === activeParticipantGroup).map(([group, label]) => {
 						const leaderboardParticipants = getLeaderboardParticipants(group);
 
@@ -960,7 +960,7 @@ export default function AdminPage() {
 							<section className="participants-panel" key={group}>
 								{loading && (
 									<div className="participants-loading-state" role="status">
-										<span className="admin-data-spinner" aria-hidden="true" />
+										<span className="admin-loading-dots" aria-hidden="true"><span /><span /><span /></span>
 										<span>Loading participants...</span>
 									</div>
 								)}
@@ -1161,7 +1161,7 @@ export default function AdminPage() {
 					<div className="questions-list">
 						{questionsLoading ? (
 							<div className="questions-loading-state" role="status">
-								<span className="admin-data-spinner" aria-hidden="true" />
+								<span className="admin-loading-dots" aria-hidden="true"><span /><span /><span /></span>
 								<span>Loading questions...</span>
 							</div>
 						) : questions.map((item, index) => (

@@ -95,7 +95,7 @@ export default function AdminLoginPage() {
             disabled={isSubmitting}
             aria-label={isSubmitting ? "Signing in" : undefined}
           >
-            {isSubmitting ? <span className="admin-spinner" role="status" aria-label="Signing in" /> : "Sign in"}
+            {isSubmitting ? <span className="admin-loading-dots" aria-hidden="true"><span /><span /><span /></span> : "Sign in"}
           </button>
         </form>
       </div>
