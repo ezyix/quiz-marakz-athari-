@@ -16,8 +16,12 @@ import {
 const StudyPdfViewer = dynamic(() => import("./StudyPdfViewer"), {
   ssr: false,
   loading: () => (
-    <div className="study-pdf-loading" role="status">
-      
+    <div className="study-pdf-loading" role="status" aria-label="Loading study material">
+      <span className="study-pdf-loading-dots" aria-hidden="true">
+        <span />
+        <span />
+        <span />
+      </span>
     </div>
   ),
 });

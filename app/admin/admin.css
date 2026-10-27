@@ -56,6 +56,7 @@
 .admin-spinner { display: inline-block; width: 20px; height: 20px; border: 2px solid currentColor; border-top-color: transparent; border-radius: 50%; animation: admin-spinner-spin .7s linear infinite; vertical-align: middle; }
 @keyframes admin-spinner-spin { to { transform: rotate(360deg); } }
 .admin-page { padding: 28px max(24px, 6vw) 56px; }
+.admin-session-loading-page { display: grid; place-items: center; padding: 24px; }
 .admin-header, .admin-tabs, .admin-live-banner, .admin-actions, .admin-stats, .participants-panel, .placeholder-panel, .questions-panel { width: min(1150px, 100%); margin-left: auto; margin-right: auto; }
 .admin-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 38px; }
 .admin-header-actions { display: flex; align-items: center; gap: 10px; }
@@ -90,6 +91,12 @@
 .questions-panel .questions-heading-copy .admin-kicker { margin: 0; color: var(--primary-dark); font-size: 10px; letter-spacing: 1.6px; }
 .questions-panel .questions-heading-copy .question-count { margin: 0; color: var(--ink); font-family: "Space Grotesk", sans-serif; font-size: 20px; font-weight: 700; }
 .admin-data-spinner { display: inline-block; width: 22px; height: 22px; flex: 0 0 auto; border: 3px solid rgba(57, 127, 207, .2); border-top-color: var(--primary-dark); border-radius: 50%; animation: admin-spinner-spin .75s linear infinite; vertical-align: middle; }
+.admin-loading-dots { display: inline-flex; align-items: center; gap: 4px; flex: 0 0 auto; }
+.admin-loading-dots > span { width: 6px; height: 6px; border-radius: 50%; background: var(--primary-dark); animation: admin-loading-dot 1s ease-in-out infinite; }
+.admin-loading-dots > span:nth-child(2) { animation-delay: 150ms; }
+.admin-loading-dots > span:nth-child(3) { animation-delay: 300ms; }
+@keyframes admin-loading-dot { 0%, 60%, 100% { opacity: .35; transform: translateY(0); } 30% { opacity: 1; transform: translateY(-4px); } }
+@media (prefers-reduced-motion: reduce) { .admin-loading-dots > span { animation: none; } }
 .stat-card .admin-data-spinner { margin: 2px 0 4px; }
 .participants-loading-state, .questions-loading-state { display: flex; min-height: 72px; align-items: center; justify-content: center; gap: 11px; color: var(--muted); font-size: 13px; font-weight: 600; }
 .questions-loading-state { min-height: 140px; flex-direction: column; gap: 10px; }

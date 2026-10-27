@@ -452,6 +452,7 @@ export default function AdminPage() {
 				router.replace("/admin/login");
 				return;
 			}
+			setAuthenticated(true);
 
 			const syncQuizStatus = async () => {
 			 try {
@@ -473,9 +474,6 @@ export default function AdminPage() {
 			};
 
 			await syncQuizStatus();
-			if (!cancelled) {
-				setAuthenticated(true);
-			}
 		};
 
 		loadAdminDashboard();
@@ -832,7 +830,18 @@ export default function AdminPage() {
 	};
 
 	if (!authenticated) {
-		return null;
+		return (
+			<main className="admin-page admin-session-loading-page">
+				<div className="participants-loading-state" role="status">
+					<span className="admin-loading-dots" aria-hidden="true">
+						<span />
+						<span />
+						<span />
+					</span>
+					
+				</div>
+			</main>
+		);
 	}
 
 	const stats = [
