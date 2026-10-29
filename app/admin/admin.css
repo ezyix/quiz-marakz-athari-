@@ -103,7 +103,7 @@
 .stat-card .admin-data-spinner { margin: 2px 0 4px; }
 .participants-loading-state, .questions-loading-state { display: flex; min-height: 72px; align-items: center; justify-content: center; gap: 11px; color: var(--muted); font-size: 13px; font-weight: 600; }
 .questions-loading-state { min-height: 140px; flex-direction: column; gap: 10px; }
-.participants-panel:has(.participants-loading-state) .empty-state { visibility: hidden; }
+.table-loading-state { min-height: 0; }
 .participant-whatsapp { display: flex; align-items: center; gap: 5px; }
 .participant-whatsapp svg { color: var(--success); }
 .participant-name { display: flex; align-items: center; gap: 6px; text-transform: uppercase; }
