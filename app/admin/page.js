@@ -958,12 +958,6 @@ export default function AdminPage() {
 
 						return (
 							<section className="participants-panel" key={group}>
-								{loading && (
-									<div className="participants-loading-state" role="status">
-										<span className="admin-loading-dots" aria-hidden="true"><span /><span /><span /></span>
-										<span>Loading participants...</span>
-									</div>
-								)}
 								<div className="panel-heading"><div><p className="admin-kicker">LIVE RESULTS</p><h2>Participants</h2></div><span>{leaderboardParticipants.length} records</span></div>
 								<div className="admin-tabs participant-filter-tabs" role="tablist" aria-label="Filter participants">
 									{leaderboardSections.map(([filterGroup, filterLabel]) => (
@@ -979,6 +973,12 @@ export default function AdminPage() {
 										</button>
 									))}
 								</div>
+								{loading && (
+									<div className="participants-loading-state" role="status">
+										<span className="admin-loading-dots" aria-hidden="true"><span /><span /><span /></span>
+										<span>Loading participants...</span>
+									</div>
+								)}
 								<div className="table-wrap"><table><thead><tr><th>Name</th><th>Gender</th><th>Age</th><th>Status</th><th>Score</th><th>Time Taken</th><th>Started</th></tr></thead><tbody>{leaderboardParticipants.map((participant) => <tr key={participant._id || participant.participantId}><td><strong className="participant-name"><svg aria-hidden="true" viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm0 2c-4.42 0-8 2.24-8 5v1h16v-1c0-2.76-3.58-5-8-5Z" /></svg>{participant.fullName}</strong><small className="participant-whatsapp"><svg aria-hidden="true" viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5.1-1.3A10 10 0 1 0 12 2zm0 18a8 8 0 0 1-4.1-1.1l-.3-.2-3 .8.8-2.9-.2-.3A8 8 0 1 1 12 20zm4.4-5.9c-.2-.1-1.4-.7-1.6-.8-.2-.1-.4-.1-.5.1-.2.2-.6.8-.8.9-.1.2-.3.2-.5.1-.2-.1-1-.4-1.9-1.2-.7-.6-1.2-1.4-1.3-1.6-.1-.2 0-.3.1-.4l.4-.4c.1-.1.2-.2.2-.4.1-.1 0-.3 0-.4l-.7-1.7c-.2-.4-.3-.4-.5-.4h-.4c-.2 0-.4.1-.6.3-.2.2-.8.8-.8 1.9s.8 2.2.9 2.4c.1.1 1.6 2.4 3.8 3.4.5.2.9.4 1.2.5.5.2 1 .2 1.3.1.4-.1 1.4-.6 1.6-1.1.2-.5.2-1 .1-1.1-.1-.1-.2-.2-.4-.3z" /></svg>{participant.whatsapp}</small></td><td>{participant.gender}</td><td>{participant.age}</td><td><span className={`status-badge ${participant.status}`}>{participant.status === "completed" ? "Completed" : "In progress"}</span></td><td>{participant.status === "completed" ? `${participant.score}/${participant.totalQuestions}` : "--"}</td><td>{getTimeTaken(participant.startedAt, participant.completedAt)}</td><td>{formatDate(participant.startedAt)}</td></tr>)}{!leaderboardParticipants.length && <tr><td colSpan="7" className="empty-state">{loading ? "Loading participants..." : "No participants ......"}</td></tr>}</tbody></table></div>
 							</section>
 						);
