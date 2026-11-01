@@ -1207,7 +1207,7 @@ export default function AdminPage() {
 						) : questions.map((item, index) => (
 							<article key={item._id} className="question-item">
 								<div className="question-header">
-									<span className="question-number-badge">Q{index + 1}</span>
+									<span className="question-number-badge">Q - {index + 1}</span>
 									<strong>{item.question}</strong>
 									<button
 										type="button"
