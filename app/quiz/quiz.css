@@ -520,6 +520,10 @@
   border-top: 1px solid #edf3f8;
 }
 
+.quiz-navigation .next-button:only-child {
+  margin-left: auto;
+}
+
 
 .previous-button,
 .next-button {

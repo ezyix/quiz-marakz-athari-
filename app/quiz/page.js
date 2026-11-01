@@ -299,20 +299,6 @@ function QuizPageContent() {
   };
 
   // ==========================================
-  // Previous question
-  // ==========================================
-
-  const handlePrevious = () => {
-    setError("");
-
-    if (currentQuestion > 0) {
-      setCurrentQuestion(
-        (previous) => previous - 1
-      );
-    }
-  };
-
-  // ==========================================
   // Finish quiz
   // ==========================================
 
@@ -633,18 +619,6 @@ function QuizPageContent() {
         {/* ================================= */}
 
         <div className="quiz-navigation">
-
-          <button
-            type="button"
-            className="previous-button"
-            onClick={handlePrevious}
-            disabled={
-              currentQuestion === 0
-            }
-          >
-            ← Previous
-          </button>
-
           <button
             type="button"
             className="next-button"
@@ -665,50 +639,6 @@ function QuizPageContent() {
         </div>
 
       </section>
-
-      {/* ================================= */}
-      {/* Question navigation */}
-      {/* ================================= */}
-
-      <div className="question-navigation">
-
-        {questions.map(
-          (item, index) => {
-
-            const answered =
-              answers[index];
-
-            return (
-              <button
-                key={item.id}
-                type="button"
-                className={`
-                  question-dot
-                  ${
-                    index ===
-                    currentQuestion
-                      ? "active"
-                      : ""
-                  }
-                  ${
-                    answered
-                      ? "answered"
-                      : ""
-                  }
-                `}
-                onClick={() =>
-                  setCurrentQuestion(
-                    index
-                  )
-                }
-              >
-                {index + 1}
-              </button>
-            );
-          }
-        )}
-
-      </div>
 
     </main>
   );

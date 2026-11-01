@@ -961,6 +961,10 @@
   border-top: 1px solid #edf3f8;
 }
 
+.quiz-navigation .next-button:only-child {
+  margin-left: auto;
+}
+
 
 .previous-button,
 .next-button {
@@ -1823,4 +1827,3 @@
 .not-started-page .not-started-card {
   margin: 0;
 }
-
