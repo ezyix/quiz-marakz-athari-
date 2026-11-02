@@ -914,7 +914,7 @@ export default function AdminPage() {
 				<div className="live-copy"><span className="live-dot" /><div><strong>{quizStarted ? "Quiz is LIVE" : "Quiz not started"}</strong><span>{quizStarted ? "Attendees can register and take the quiz now." : questions.length === 0 ? "Add at least one question before starting the quiz." : "Press Start to open the quiz for participants."}</span></div></div>
 				<div className="live-actions">
 					<button className="started-pill" type="button" onClick={handleStartQuiz} disabled={quizStarted || statusUpdating || questions.length === 0} title={questions.length === 0 ? "Add at least one question before starting" : undefined} aria-label={statusUpdating && !quizStarted ? "Starting quiz" : undefined}>
-						{statusUpdating && !quizStarted ? <span className="admin-loading-dots" aria-hidden="true"><span /><span /><span /></span> : quizStarted ? "Started" : "Start"}
+						{statusUpdating && !quizStarted ? <span className="admin-loading-dots" aria-hidden="true"><span /><span /><span /></span> : quizStarted ? "Start" : "Start"}
 					</button>
 					<button className="end-quiz-button" type="button" onClick={handleEndQuiz} disabled={!quizStarted || statusUpdating} aria-label={statusUpdating && quizStarted ? "Finishing quiz" : undefined}>
 						{statusUpdating && quizStarted ? <span className="admin-loading-dots" aria-hidden="true"><span /><span /><span /></span> : "End"}
@@ -1027,9 +1027,25 @@ export default function AdminPage() {
 			) : (
 				<section className="questions-panel">
 					<div className="panel-heading">
-					<div>
-							<p className="admin-kicker">QUESTIONS</p>
-							<p className="question-count">{questionsLoading ? <span className="admin-data-spinner" role="status" aria-label="Loading questions" /> : `Total - ${questions.length} Q`}</p>
+						<div className="questions-heading-copy">
+							<span className="questions-heading-icon" aria-hidden="true">
+								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+									<path d="M8 5.5A3.5 3.5 0 0 1 11.5 2h1A3.5 3.5 0 0 1 16 5.5v13a3.5 3.5 0 0 0-3.5-3.5h-1A3.5 3.5 0 0 0 8 18.5z" />
+									<path d="M8 5.5H6A3 3 0 0 0 3 8.5v10A3.5 3.5 0 0 1 6.5 15H8m8-9h2a3 3 0 0 1 3 3v10a3.5 3.5 0 0 0-3.5-3H16" />
+								</svg>
+							</span>
+							<div className="questions-heading-title">
+								<p className="admin-kicker">QUESTION BANK</p>
+								<h2>Questions</h2>
+								<p className="questions-heading-description">Create and manage the questions in your quiz.</p>
+							</div>
+							<span className="question-count" aria-live="polite" aria-label={questionsLoading ? "Loading questions" : `${questions.length} ${questions.length === 1 ? "question" : "questions"} in the bank`}>
+								{questionsLoading ? (
+									<span className="admin-data-spinner" role="status" aria-label="Loading questions" />
+								) : (
+									<>{questions.length} {questions.length === 1 ? "question" : "questions"}</>
+								)}
+							</span>
 						</div>
 						<div className="question-panel-actions">
 							<div className={`question-menu-container${questionMenuOpen ? " is-open" : ""}`} ref={questionMenuRef}>
@@ -1047,6 +1063,7 @@ export default function AdminPage() {
 									<svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
 										{questionMenuOpen ? <path d="m6 6 12 12M18 6 6 18" /> : <path d="M4 6h16M4 12h16M4 18h16" />}
 									</svg>
+									<span className="question-menu-label">Manage</span>
 								</button>
 								{questionMenuOpen && (
 									<>
@@ -1084,7 +1101,7 @@ export default function AdminPage() {
 							</span>
 							<div className="timer-settings-title">
 								<p className="admin-kicker">QUIZ TIMER</p>
-								<h2>Quiz duration</h2>
+								<h2>Duration</h2>
 							</div>
 						</div>
 						<div className="timer-settings-controls">

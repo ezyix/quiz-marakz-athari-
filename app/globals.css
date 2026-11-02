@@ -1,3 +1,4 @@
+@import url("https://fonts.googleapis.com/css2?family=Baloo+Chettan+2:wght@400;500;600;700;800&display=swap");
 
         * {
           box-sizing: border-box;
@@ -464,6 +465,7 @@
   font-family:
     "Outfit",
     "Inter",
+    "Baloo Chettan 2",
     Arial,
     sans-serif;
 }
