@@ -76,6 +76,7 @@ ParticipantSchema.index(
   { fullName: 1, whatsapp: 1 },
   { unique: true, name: "unique_participant_name_whatsapp" }
 );
+ParticipantSchema.index({ createdAt: -1 });
 
 const existingParticipant = mongoose.models.Participant;
 const hasNamePhoneIndex = existingParticipant?.schema.indexes().some(

@@ -24,6 +24,118 @@ import { getAnswerKey } from "../../lib/questionCache";
 
 const DEFAULT_DURATION_SECONDS = 60;
 const SUBMIT_GRACE_SECONDS = 30;
+const DEFAULT_PAGE_LIMIT = 50;
+const MAX_PAGE_LIMIT = 200;
+
+// Same group rules as the admin leaderboard tabs.
+const GROUP_FILTERS = {
+  all: {},
+  male: { gender: "Male", age: { $gte: 13 } },
+  female: { gender: "Female", age: { $gte: 13 } },
+  kidsMale: { gender: "Male", age: { $lt: 13 } },
+  kidsFemale: { gender: "Female", age: { $lt: 13 } },
+};
+
+function clampInteger(value, fallback, min, max) {
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isFinite(parsed)) {
+    return fallback;
+  }
+  return Math.min(max, Math.max(min, parsed));
+}
+
+const isCompleted = { $eq: ["$status", "completed"] };
+const hasValidDuration = {
+  $and: [
+    isCompleted,
+    { $eq: [{ $type: "$startedAt" }, "date"] },
+    { $eq: [{ $type: "$completedAt" }, "date"] },
+    { $gte: ["$completedAt", "$startedAt"] },
+  ],
+};
+const completionDuration = { $subtract: ["$completedAt", "$startedAt"] };
+
+async function getParticipantSummary() {
+  const isAdult = { $gte: ["$age", 13] };
+  const isKid = { $lt: ["$age", 13] };
+  const isMale = { $eq: ["$gender", "Male"] };
+  const isFemale = { $eq: ["$gender", "Female"] };
+  const countIf = (condition) => ({ $sum: { $cond: [condition, 1, 0] } });
+
+  const [summary] = await Participant.aggregate([
+    {
+      $group: {
+        _id: null,
+        total: { $sum: 1 },
+        male: countIf({ $and: [isMale, isAdult] }),
+        female: countIf({ $and: [isFemale, isAdult] }),
+        kids: countIf(isKid),
+        kidsMale: countIf({ $and: [isKid, isMale] }),
+        kidsFemale: countIf({ $and: [isKid, isFemale] }),
+        inProgress: countIf({ $eq: ["$status", "attending"] }),
+        completed: countIf(isCompleted),
+        // $min ignores nulls.
+        fastestFinish: {
+          $min: { $cond: [hasValidDuration, completionDuration, null] },
+        },
+      },
+    },
+    { $project: { _id: 0 } },
+  ]);
+
+  return {
+    total: summary?.total ?? 0,
+    male: summary?.male ?? 0,
+    female: summary?.female ?? 0,
+    kids: summary?.kids ?? 0,
+    kidsMale: summary?.kidsMale ?? 0,
+    kidsFemale: summary?.kidsFemale ?? 0,
+    inProgress: summary?.inProgress ?? 0,
+    completed: summary?.completed ?? 0,
+    fastestFinish: summary?.fastestFinish ?? null,
+  };
+}
+
+// Leaderboard order: completed first, then highest score rate, then fastest
+// finish; in-progress participants stay newest first.
+async function getLeaderboardPage(match, requestedPage, limit) {
+  const total = await Participant.countDocuments(match);
+  const totalPages = Math.max(1, Math.ceil(total / limit));
+  const page = Math.min(requestedPage, totalPages);
+
+  const participants = await Participant.aggregate([
+    { $match: match },
+    {
+      $addFields: {
+        _rankCompleted: { $cond: [isCompleted, 0, 1] },
+        _rankScoreRate: {
+          $cond: [
+            { $and: [isCompleted, { $gt: ["$totalQuestions", 0] }] },
+            { $divide: ["$score", "$totalQuestions"] },
+            0,
+          ],
+        },
+        _rankDuration: {
+          $cond: [hasValidDuration, completionDuration, Number.MAX_SAFE_INTEGER],
+        },
+      },
+    },
+    {
+      $sort: {
+        _rankCompleted: 1,
+        _rankScoreRate: -1,
+        _rankDuration: 1,
+        createdAt: -1,
+        _id: -1,
+      },
+    },
+    { $skip: (page - 1) * limit },
+    { $limit: limit },
+    { $project: { _rankCompleted: 0, _rankScoreRate: 0, _rankDuration: 0 } },
+  ]);
+
+  return { participants, total, page, totalPages };
+}
 
 // ==========================================
 // GET
@@ -41,55 +153,53 @@ export async function GET(request) {
 
     await connectDB();
 
-    const participants = await Participant.find({})
-      .sort({ createdAt: -1 })
-      .lean();
+    const { searchParams } = new URL(request.url);
+    const all = searchParams.get("all") === "1";
+    const requestedGroup = searchParams.get("group") || "all";
+    const group = Object.prototype.hasOwnProperty.call(GROUP_FILTERS, requestedGroup)
+      ? requestedGroup
+      : "all";
+    const limit = clampInteger(searchParams.get("limit"), DEFAULT_PAGE_LIMIT, 1, MAX_PAGE_LIMIT);
+    const requestedPage = clampInteger(searchParams.get("page"), 1, 1, Number.MAX_SAFE_INTEGER);
 
-    const completed = participants.filter(
-      (participant) => participant.status === "completed"
-    );
+    const summaryPromise = getParticipantSummary();
 
-    const durations = completed
-      .filter(
-        (participant) =>
-          participant.startedAt && participant.completedAt
-      )
-      .map(
-        (participant) =>
-          new Date(participant.completedAt).getTime() -
-          new Date(participant.startedAt).getTime()
-      )
-      .filter((duration) => duration >= 0);
+    if (all) {
+      // Full export (PDF): newest first, same shape as before.
+      const [participants, summary] = await Promise.all([
+        Participant.find({}).sort({ createdAt: -1 }).lean(),
+        summaryPromise,
+      ]);
 
-    const fastestFinish = durations.length
-      ? Math.min(...durations)
-      : null;
+      return NextResponse.json({
+        success: true,
+        participants,
+        summary,
+        pagination: {
+          page: 1,
+          limit: participants.length,
+          total: participants.length,
+          totalPages: 1,
+          group: "all",
+        },
+      }, { headers: { "Cache-Control": "no-store" } });
+    }
+
+    const [leaderboard, summary] = await Promise.all([
+      getLeaderboardPage(GROUP_FILTERS[group], requestedPage, limit),
+      summaryPromise,
+    ]);
 
     return NextResponse.json({
       success: true,
-      participants,
-      summary: {
-        total: participants.length,
-        male: participants.filter(
-          (participant) => participant.gender === "Male" && participant.age >= 13
-        ).length,
-        female: participants.filter(
-          (participant) => participant.gender === "Female" && participant.age >= 13
-        ).length,
-        kids: participants.filter(
-          (participant) => participant.age < 13
-        ).length,
-        kidsMale: participants.filter(
-          (participant) => participant.age < 13 && participant.gender === "Male"
-        ).length,
-        kidsFemale: participants.filter(
-          (participant) => participant.age < 13 && participant.gender === "Female"
-        ).length,
-        inProgress: participants.filter(
-          (participant) => participant.status === "attending"
-        ).length,
-        completed: completed.length,
-        fastestFinish,
+      participants: leaderboard.participants,
+      summary,
+      pagination: {
+        page: leaderboard.page,
+        limit,
+        total: leaderboard.total,
+        totalPages: leaderboard.totalPages,
+        group,
       },
     }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
