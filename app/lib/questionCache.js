@@ -25,10 +25,27 @@ export function getQuestions({ isAdmin, version }) {
   );
 }
 
+const ANSWER_KEY_TTL_MS = 60 * 1000;
+const ANSWER_KEY_PREFIX = "answer-key";
+
+// Server-only answer key: { answers: Map(questionId -> answer), total }.
+export function getAnswerKey(version) {
+  return cached(`${ANSWER_KEY_PREFIX}:${version}`, ANSWER_KEY_TTL_MS, async () => {
+    const questions = await Question.find({}).select("answer").lean();
+    return {
+      answers: new Map(
+        questions.map((question) => [String(question._id), question.answer])
+      ),
+      total: questions.length,
+    };
+  });
+}
+
 // Call after any question add/delete.
 export async function invalidateQuestionCaches() {
   invalidate(ADMIN_QUESTIONS_KEY);
   invalidatePrefix(STUDENT_QUESTIONS_PREFIX);
+  invalidatePrefix(ANSWER_KEY_PREFIX);
 
   // Bump the version other instances see through the quiz-state cache.
   await QuizState.updateOne(

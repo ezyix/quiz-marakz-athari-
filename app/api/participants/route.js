@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import connectDB from "../../lib/mongodb";
 import Participant from "../../models/Participant";
-import Question from "../../models/Question";
 import QuizState from "../../models/QuizState";
 import {
   PARTICIPANT_COOKIE,
@@ -16,7 +15,15 @@ import {
   getCountries,
   parsePhoneNumberFromString,
 } from "libphonenumber-js";
-import { QUIZ_STATE_KEY, getQuizState } from "../../lib/quizState";
+import {
+  QUIZ_STATE_KEY,
+  getQuizState,
+  getQuizStateVersion,
+} from "../../lib/quizState";
+import { getAnswerKey } from "../../lib/questionCache";
+
+const DEFAULT_DURATION_SECONDS = 60;
+const SUBMIT_GRACE_SECONDS = 30;
 
 // ==========================================
 // GET
@@ -338,52 +345,65 @@ export async function PATCH(request) {
     }
 
     await connectDB();
-    const participant =
-      await Participant.findOne({
-        participantId,
-      });
-
-    if (!participant) {
-      return NextResponse.json(
-        {
-          success: false,
-          message: "Participant not found.",
-        },
-        {
-          status: 404,
-        }
-      );
-    }
-
-    if (participant.status === "completed") {
-      return NextResponse.json(
-        { success: false, message: "This quiz has already been submitted." },
-        { status: 409 }
-      );
-    }
-
-    const questions = await Question.find({})
-      .select("answer")
-      .lean();
-    if (!questions.length) {
+    const quizState = await getQuizState();
+    const answerKey = await getAnswerKey(getQuizStateVersion(quizState));
+    if (!answerKey.total) {
       return NextResponse.json(
         { success: false, message: "The quiz has no questions." },
         { status: 409 }
       );
     }
 
-    const score = questions.reduce((total, question) => {
-      return submittedAnswers.get(String(question._id)) === question.answer
-        ? total + 1
-        : total;
-    }, 0);
+    let score = 0;
+    for (const [questionId, correctAnswer] of answerKey.answers) {
+      if (submittedAnswers.get(questionId) === correctAnswer) {
+        score += 1;
+      }
+    }
 
-    participant.status = "completed";
-    participant.completedAt = new Date();
-    participant.score = score;
-    participant.totalQuestions = questions.length;
+    const completedAt = new Date();
+    const durationSeconds = quizState?.durationSeconds ?? DEFAULT_DURATION_SECONDS;
+    const onTimeSince = new Date(
+      completedAt.getTime() - (durationSeconds + SUBMIT_GRACE_SECONDS) * 1000
+    );
+    const completion = {
+      status: "completed",
+      completedAt,
+      score,
+      totalQuestions: answerKey.total,
+    };
+    const updateOptions = { returnDocument: "after" };
 
-    await participant.save();
+    // Atomic: only an "attending" participant can be completed, once.
+    // Common case (on time) is a single query.
+    let participant = await Participant.findOneAndUpdate(
+      {
+        participantId,
+        status: "attending",
+        $or: [
+          { startedAt: { $gte: onTimeSince } },
+          { startedAt: null },
+        ],
+      },
+      { ...completion, late: false },
+      updateOptions
+    ).lean();
+
+    if (!participant) {
+      // Past the time limit + grace: still record answers, but flag as late.
+      participant = await Participant.findOneAndUpdate(
+        { participantId, status: "attending" },
+        { ...completion, late: true },
+        updateOptions
+      ).lean();
+    }
+
+    if (!participant) {
+      return NextResponse.json(
+        { success: false, message: "This quiz has already been submitted or the participant was not found." },
+        { status: 409 }
+      );
+    }
 
     const response = NextResponse.json({
       success: true,
@@ -399,6 +419,8 @@ export async function PATCH(request) {
           participant.totalQuestions,
         completedAt:
           participant.completedAt,
+        late:
+          participant.late,
       },
     });
 
