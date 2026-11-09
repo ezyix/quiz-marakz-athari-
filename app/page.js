@@ -3,28 +3,15 @@
 import "./globals.css";
 import "./quiz/quiz.css";
 import "./study-material.css";
-import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
+import StudyPdfViewer from "./StudyPdfViewer";
 import {
   getCountries,
   getCountryCallingCode,
   parsePhoneNumberFromString,
 } from "libphonenumber-js";
-
-const StudyPdfViewer = dynamic(() => import("./StudyPdfViewer"), {
-  ssr: false,
-  loading: () => (
-    <div className="study-pdf-loading" role="status" aria-label="Loading study material">
-      <span className="study-pdf-loading-dots" aria-hidden="true">
-        <span />
-        <span />
-        <span />
-      </span>
-    </div>
-  ),
-});
 
 const STATUS_POLL_BASE_MS = 15000;
 const STATUS_POLL_JITTER_MS = 3000;
@@ -506,52 +493,64 @@ export default function LoadingPage() {
             </div>
           )}
           {remainingSeconds !== 0 && (
-            <div className="study-download-section">
-              <a
-                className="study-download-button"
-                href="/Fathiha.pdf"
-                download="Fathiha.pdf"
-                onClick={() => showStudyToast("PDF downloading...")}
-              >
-                <svg
-                  className="study-action-icon"
-                  aria-hidden="true"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
+            <>
+              <div className="study-open-pdf-section">
+                <a
+                  className="study-download-button study-open-pdf-button"
+                  href="/Fathiha.pdf"
+                  target="_blank"
+                  rel="noopener noreferrer"
                 >
-                  <path d="M12 3v12" />
-                  <path d="m7 10 5 5 5-5" />
-                  <path d="M5 17v3h14v-3" />
-                </svg>
-                Download PDF
-              </a>
-              <button
-                className="study-download-button study-share-button"
-                type="button"
-                onClick={handleShareStudyPdf}
-              >
-                <svg
-                  className="study-action-icon"
-                  aria-hidden="true"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
+                  Open PDF to Read More
+                </a>
+              </div>
+              <div className="study-download-section">
+                <a
+                  className="study-download-button"
+                  href="/Fathiha.pdf"
+                  download="Fathiha.pdf"
+                  onClick={() => showStudyToast("PDF downloading...")}
                 >
-                  <circle cx="18" cy="5" r="3" />
-                  <circle cx="6" cy="12" r="3" />
-                  <circle cx="18" cy="19" r="3" />
-                  <path d="m8.7 10.7 6.6-4.4M8.7 13.3l6.6 4.4" />
-                </svg>
-                Share PDF
-              </button>
-            </div>
+                  <svg
+                    className="study-action-icon"
+                    aria-hidden="true"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M12 3v12" />
+                    <path d="m7 10 5 5 5-5" />
+                    <path d="M5 17v3h14v-3" />
+                  </svg>
+                  Download PDF
+                </a>
+                <button
+                  className="study-download-button study-share-button"
+                  type="button"
+                  onClick={handleShareStudyPdf}
+                >
+                  <svg
+                    className="study-action-icon"
+                    aria-hidden="true"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <circle cx="18" cy="5" r="3" />
+                    <circle cx="6" cy="12" r="3" />
+                    <circle cx="18" cy="19" r="3" />
+                    <path d="m8.7 10.7 6.6-4.4M8.7 13.3l6.6 4.4" />
+                  </svg>
+                  Share PDF
+                </button>
+              </div>
+            </>
           )}
         </section>
       </main>
