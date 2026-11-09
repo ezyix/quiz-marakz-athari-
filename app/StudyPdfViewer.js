@@ -23,6 +23,14 @@ export default function StudyPdfViewer() {
           height={519}
           sizes="(max-width: 452px) calc(100vw - 42px), 420px"
         />
+        <Image
+          className="study-material-page"
+          src="/image-3.png"
+          alt="Study material page 3"
+          width={367}
+          height={519}
+          sizes="(max-width: 452px) calc(100vw - 42px), 420px"
+        />
       </div>
     </div>
   );
