@@ -15,11 +15,19 @@ export async function GET() {
 
     const state = await getQuizState();
 
-    return NextResponse.json({
-      success: true,
-      isStarted: Boolean(state?.isStarted),
-      durationSeconds: state?.durationSeconds ?? 60,
-    });
+    // Public, cookie-independent response: let the CDN absorb polling.
+    return NextResponse.json(
+      {
+        success: true,
+        isStarted: Boolean(state?.isStarted),
+        durationSeconds: state?.durationSeconds ?? 60,
+      },
+      {
+        headers: {
+          "Cache-Control": "public, s-maxage=3, stale-while-revalidate=5",
+        },
+      }
+    );
   } catch (error) {
     console.error("Quiz status fetch error:", error);
 
