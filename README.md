@@ -30,15 +30,24 @@ ADMIN_EMAIL=
 ADMIN_PASSWORD=
 ADMIN_SESSION_SECRET=
 PARTICIPANT_SESSION_SECRET=
+# Optional: rate limits per IP, per minute, per server instance
+RATE_LIMIT_REGISTER_PER_MIN=300
+RATE_LIMIT_LOGIN_PER_MIN=5
+# Preview/dev only; ignored when VERCEL_ENV=production
+RATE_LIMIT_DISABLED=
 ```
 
-Use an admin password with at least 5 characters and unique random secrets of at least 32 characters for both session secrets. Generate each session secret independently with:
+Use an admin password with at least 12 characters and unique random secrets of at least 32 characters for both session secrets. Generate each session secret independently with:
 
 ```bash
 node -e "console.log(require('node:crypto').randomBytes(48).toString('base64url'))"
 ```
 
 Do not commit `.env` or share these values. The admin login is unavailable until its credentials and session secret are configured. Participant registration and quiz submission also require `PARTICIPANT_SESSION_SECRET`.
+
+## Load testing
+
+A k6 script for about 5000 concurrent participants is in `loadtest/quiz.js`. Read [loadtest/README.md](loadtest/README.md) first. Only run it against a Vercel Preview deployment that uses a separate test database.
 
 ## Learn More
 
