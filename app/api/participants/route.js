@@ -16,8 +16,7 @@ import {
   getCountries,
   parsePhoneNumberFromString,
 } from "libphonenumber-js";
-
-const QUIZ_STATE_KEY = "global";
+import { QUIZ_STATE_KEY, getQuizState } from "../../lib/quizState";
 
 // ==========================================
 // GET
@@ -116,9 +115,7 @@ export async function POST(request) {
 
     await connectDB();
 
-    const quizState = await QuizState.findOne({ key: QUIZ_STATE_KEY })
-      .select("isStarted")
-      .lean();
+    const quizState = await getQuizState();
     if (!quizState?.isStarted) {
       return NextResponse.json(
         { success: false, message: "Registration is closed." },

@@ -3,14 +3,17 @@ import connectDB from "../../lib/mongodb";
 import Question from "../../models/Question";
 import QuizState from "../../models/QuizState";
 import { isAdminRequest, isSameOriginRequest } from "../../lib/auth";
-
-const QUIZ_STATE_KEY = "global";
+import {
+  QUIZ_STATE_KEY,
+  getQuizState,
+  invalidateQuizState,
+} from "../../lib/quizState";
 
 export async function GET() {
   try {
     await connectDB();
 
-    const state = await QuizState.findOne({ key: QUIZ_STATE_KEY }).lean();
+    const state = await getQuizState();
 
     return NextResponse.json({
       success: true,
@@ -106,6 +109,7 @@ export async function PATCH(request) {
         setDefaultsOnInsert: true,
       }
     );
+    invalidateQuizState();
 
     return NextResponse.json({
       success: true,

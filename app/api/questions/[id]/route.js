@@ -4,8 +4,7 @@ import connectDB from "../../../lib/mongodb";
 import Question from "../../../models/Question";
 import QuizState from "../../../models/QuizState";
 import { isAdminRequest, isSameOriginRequest } from "../../../lib/auth";
-
-const QUIZ_STATE_KEY = "global";
+import { QUIZ_STATE_KEY } from "../../../lib/quizState";
 
 export async function DELETE(request, { params }) {
   try {

@@ -3,17 +3,14 @@ import connectDB from "../../lib/mongodb";
 import Question from "../../models/Question";
 import QuizState from "../../models/QuizState";
 import { isAdminRequest, isSameOriginRequest } from "../../lib/auth";
-
-const QUIZ_STATE_KEY = "global";
+import { QUIZ_STATE_KEY, getQuizState } from "../../lib/quizState";
 
 export async function GET(request) {
   try {
     await connectDB();
     const isAdmin = isAdminRequest(request);
     if (!isAdmin) {
-      const quizState = await QuizState.findOne({ key: QUIZ_STATE_KEY })
-        .select("isStarted")
-        .lean();
+      const quizState = await getQuizState();
 
       if (!quizState?.isStarted) {
         return NextResponse.json(
