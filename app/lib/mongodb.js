@@ -25,10 +25,19 @@ async function connectDB() {
   if (!cached.promise) {
     cached.promise = mongoose.connect(MONGODB_URI, {
       bufferCommands: false,
+      // Serverless: many instances, each with its own pool.
+      maxPoolSize: 5,
+      serverSelectionTimeoutMS: 5000,
     });
   }
 
-  cached.conn = await cached.promise;
+  try {
+    cached.conn = await cached.promise;
+  } catch (error) {
+    // Do not cache a failed connection attempt; let the next request retry.
+    cached.promise = null;
+    throw error;
+  }
 
   return cached.conn;
 }
