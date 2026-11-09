@@ -23,6 +23,17 @@ const emptySummary = {
 	fastestFinish: null,
 };
 
+const PARTICIPANTS_PAGE_SIZE = 50;
+const PARTICIPANTS_REFRESH_MS = 5000;
+
+const emptyPagination = {
+	page: 1,
+	limit: PARTICIPANTS_PAGE_SIZE,
+	total: 0,
+	totalPages: 1,
+	group: "all",
+};
+
 function formatDuration(duration) {
 	if (duration === null || duration === undefined) {
 		return "--";
@@ -57,43 +68,6 @@ function getTimeTaken(startedAt, completedAt) {
 	}
 
 	return "In progress";
-}
-
-function compareLeaderboardParticipants(first, second) {
-	const firstCompleted = first.status === "completed";
-	const secondCompleted = second.status === "completed";
-
-	if (firstCompleted !== secondCompleted) {
-		return firstCompleted ? -1 : 1;
-	}
-
-	if (!firstCompleted) {
-		return 0;
-	}
-
-	const getScoreRate = (participant) => {
-		const score = Number(participant.score);
-		const totalQuestions = Number(participant.totalQuestions);
-		return Number.isFinite(score) && Number.isFinite(totalQuestions) && totalQuestions > 0
-			? score / totalQuestions
-			: 0;
-	};
-	const scoreDifference = getScoreRate(second) - getScoreRate(first);
-
-	if (scoreDifference !== 0) {
-		return scoreDifference;
-	}
-
-	const getCompletionDuration = (participant) => {
-		const start = new Date(participant.startedAt).getTime();
-		const end = new Date(participant.completedAt).getTime();
-		return Number.isFinite(start) && Number.isFinite(end) && end >= start
-			? end - start
-			: Number.POSITIVE_INFINITY;
-	};
-
-	const durationDifference = getCompletionDuration(first) - getCompletionDuration(second);
-	return Number.isNaN(durationDifference) ? 0 : durationDifference;
 }
 
 async function createParticipantsPdf(participants) {
@@ -338,6 +312,12 @@ export default function AdminPage() {
 	const [isInstalled, setIsInstalled] = useState(false);
 	const [participants, setParticipants] = useState([]);
 	const [summary, setSummary] = useState(emptySummary);
+	const [pagination, setPagination] = useState(emptyPagination);
+	const [participantsPage, setParticipantsPage] = useState(1);
+	const [tableLoading, setTableLoading] = useState(false);
+	const participantsRequestRef = useRef(0);
+	// Current leaderboard view, read by background refreshes.
+	const participantsViewRef = useRef({ page: 1, group: "all" });
 	const [loading, setLoading] = useState(true);
 	const [questionsLoading, setQuestionsLoading] = useState(true);
 	const [participantsDeleting, setParticipantsDeleting] = useState(false);
@@ -484,13 +464,22 @@ export default function AdminPage() {
 	}, [router]);
 
 	const loadParticipants = async ({ silent = false } = {}) => {
+		const { page, group } = participantsViewRef.current;
+		const requestId = participantsRequestRef.current + 1;
+		participantsRequestRef.current = requestId;
+
 		if (!silent) {
 			setLoading(true);
 		}
 		setError("");
 
 		try {
-			const response = await fetch("/api/participants", {
+			const params = new URLSearchParams({
+				group,
+				page: String(page),
+				limit: String(PARTICIPANTS_PAGE_SIZE),
+			});
+			const response = await fetch(`/api/participants?${params}`, {
 				cache: "no-store",
 			});
 			const data = await response.json();
@@ -499,15 +488,40 @@ export default function AdminPage() {
 				throw new Error(data.message || "Failed to load participants.");
 			}
 
+			// Ignore responses that were overtaken by a newer request.
+			if (requestId !== participantsRequestRef.current) {
+				return;
+			}
+
+			const nextPagination = data.pagination || emptyPagination;
 			setParticipants(data.participants || []);
 			setSummary(data.summary || emptySummary);
+			setPagination(nextPagination);
+			if (nextPagination.page !== page) {
+				participantsViewRef.current = { page: nextPagination.page, group };
+				setParticipantsPage(nextPagination.page);
+			}
 		} catch (requestError) {
-			setError(requestError.message || "Failed to load participants.");
+			if (requestId === participantsRequestRef.current) {
+				setError(requestError.message || "Failed to load participants.");
+			}
 		} finally {
+			if (requestId === participantsRequestRef.current) {
+				setTableLoading(false);
+			}
 			if (!silent) {
 				setLoading(false);
 			}
 		}
+	};
+
+	const showParticipantsView = ({ page, group }) => {
+		participantsViewRef.current = { page, group };
+		setActiveParticipantGroup(group);
+		setParticipantsPage(page);
+		setParticipants([]);
+		setTableLoading(true);
+		loadParticipants({ silent: true });
 	};
 
 	const loadQuestions = async () => {
@@ -648,7 +662,7 @@ export default function AdminPage() {
 
 		const refreshInterval = setInterval(() => {
 			loadParticipants({ silent: true });
-		},2000);
+		}, PARTICIPANTS_REFRESH_MS);
 
 		return () => clearInterval(refreshInterval);
 	}, [authenticated, quizStarted]);
@@ -744,6 +758,9 @@ export default function AdminPage() {
 		setAuthenticated(false);
 		setParticipants([]);
 		setSummary(emptySummary);
+		setPagination(emptyPagination);
+		setParticipantsPage(1);
+		participantsViewRef.current = { page: 1, group: activeParticipantGroup };
 		router.replace("/admin/login");
 	};
 
@@ -772,7 +789,7 @@ export default function AdminPage() {
 	};
 
 	const handleClearParticipants = async () => {
-		if (quizStarted || participants.length === 0) {
+		if (quizStarted || summary.total === 0) {
 			setShowClearDataModal(false);
 			return;
 		}
@@ -790,6 +807,9 @@ export default function AdminPage() {
 
 			setParticipants([]);
 			setSummary(emptySummary);
+			setPagination(emptyPagination);
+			setParticipantsPage(1);
+			participantsViewRef.current = { page: 1, group: activeParticipantGroup };
 			setShowClearDataModal(false);
 		} catch (requestError) {
 			setError(requestError.message || "Failed to clear participant data.");
@@ -799,15 +819,23 @@ export default function AdminPage() {
 	};
 
 	const handleDownloadParticipantsPdf = async () => {
-		if (loading || participants.length === 0) {
+		if (loading || summary.total === 0) {
 			return;
 		}
 
 		showInstallMessage("Downloading participant data as PDF...");
-		await new Promise((resolve) => window.setTimeout(resolve, 100));
 
 		try {
-			const pdf = await createParticipantsPdf(participants);
+			const response = await fetch("/api/participants?all=1", {
+				cache: "no-store",
+			});
+			const data = await response.json();
+
+			if (!response.ok) {
+				throw new Error(data.message || "Failed to load participants.");
+			}
+
+			const pdf = await createParticipantsPdf(data.participants || []);
 			const url = URL.createObjectURL(pdf);
 			const link = document.createElement("a");
 			link.href = url;
@@ -855,27 +883,8 @@ export default function AdminPage() {
 		["kidsFemale", "Kids - F"],
 	];
 
-	const getLeaderboardParticipants = (group) => participants
-		.filter((participant) => {
-			if (group === "kidsMale") {
-				return Number(participant.age) < 13 && participant.gender === "Male";
-			}
-
-			if (group === "kidsFemale") {
-				return Number(participant.age) < 13 && participant.gender === "Female";
-			}
-
-			if (group === "male") {
-				return participant.gender === "Male" && Number(participant.age) >= 13;
-			}
-
-			if (group === "female") {
-				return participant.gender === "Female" && Number(participant.age) >= 13;
-			}
-
-			return true;
-		})
-		.sort(compareLeaderboardParticipants);
+	// Participants arrive already filtered by group, ranked and paged by the API.
+	const tableBusy = loading || tableLoading;
 
 	return (
 		<main className="admin-page">
@@ -925,12 +934,12 @@ export default function AdminPage() {
 			{activeView === "leaderboard" ? (
 				<>
 					<div className="admin-actions">
-						<button className="refresh-participants-button" type="button" onClick={loadParticipants} disabled={loading}>↻ Refresh</button>
+						<button className="refresh-participants-button" type="button" onClick={() => loadParticipants()} disabled={loading}>↻ Refresh</button>
 						<button
 							type="button"
 							className="download-participants-pdf"
 							onClick={handleDownloadParticipantsPdf}
-							disabled={loading || participants.length === 0}
+							disabled={loading || summary.total === 0}
 						>
 							<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
 								<path d="M12 3v12m-5-5 5 5 5-5" />
@@ -938,7 +947,7 @@ export default function AdminPage() {
 							</svg>
 								Data  PDF
 						</button>
-						<button className="clear-participants-button" type="button" onClick={() => setShowClearDataModal(true)} disabled={quizStarted || participantsDeleting || participants.length === 0} title={quizStarted ? "End the quiz before clearing participant data." : undefined}>
+						<button className="clear-participants-button" type="button" onClick={() => setShowClearDataModal(true)} disabled={quizStarted || participantsDeleting || summary.total === 0} title={quizStarted ? "End the quiz before clearing participant data." : undefined}>
 							<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
 								<path d="M3 6h18m-2 0-.9 14H5.9L5 6m4 0V4h6v2m-5 4v6m4-6v6" />
 							</svg>
@@ -947,12 +956,12 @@ export default function AdminPage() {
 					</div>
 					{error && <p className="admin-data-error">{error}</p>}
 					<section className="admin-stats">{stats.map(([label, value]) => <article className={`stat-card${label === "Kids" ? " kids-stat-card" : ""}`} key={label}><span>{label}</span>{loading ? <span className="admin-loading-dots" role="status" aria-label={`Loading ${label.toLowerCase()}`}><span /><span /><span /></span> : label !== "Kids" ? <strong>{value}</strong> : <div className="kids-gender-counts"><span className="kids-gender-badge male">M - <strong>{summary.kidsMale}</strong></span><span className="kids-gender-badge female">F - <strong>{summary.kidsFemale}</strong></span></div>}</article>)}</section>
-					{leaderboardSections.filter(([group]) => group === activeParticipantGroup).map(([group, label]) => {
-						const leaderboardParticipants = getLeaderboardParticipants(group);
+					{leaderboardSections.filter(([group]) => group === activeParticipantGroup).map(([group]) => {
+						const leaderboardParticipants = participants;
 
 						return (
 							<section className="participants-panel" key={group}>
-								<div className="panel-heading"><div><p className="admin-kicker">LIVE RESULTS</p><h2>Participants</h2></div><span>{leaderboardParticipants.length} records</span></div>
+								<div className="panel-heading"><div><p className="admin-kicker">LIVE RESULTS</p><h2>Participants</h2></div><span>{pagination.total} records</span></div>
 								<div className="admin-tabs participant-filter-tabs" role="tablist" aria-label="Filter participants">
 									{leaderboardSections.map(([filterGroup, filterLabel]) => (
 										<button
@@ -961,7 +970,11 @@ export default function AdminPage() {
 											type="button"
 											role="tab"
 											aria-selected={activeParticipantGroup === filterGroup}
-											onClick={() => setActiveParticipantGroup(filterGroup)}
+											onClick={() => {
+												if (filterGroup !== activeParticipantGroup) {
+													showParticipantsView({ page: 1, group: filterGroup });
+												}
+											}}
 										>
 											{filterLabel}
 										</button>
@@ -1008,7 +1021,7 @@ export default function AdminPage() {
 											{!leaderboardParticipants.length && (
 												<tr>
 													<td colSpan="7" className="empty-state">
-														{loading ? (
+														{tableBusy ? (
 															<div className="participants-loading-state table-loading-state" role="status">
 																<span className="admin-loading-dots" aria-hidden="true"><span /><span /><span /></span>
 																<span>Loading participants...</span>
@@ -1020,6 +1033,25 @@ export default function AdminPage() {
 										</tbody>
 									</table>
 								</div>
+								{pagination.totalPages > 1 && (
+									<nav className="participants-pagination" aria-label="Participant pages">
+										<button
+											type="button"
+											onClick={() => showParticipantsView({ page: participantsPage - 1, group })}
+											disabled={tableBusy || participantsPage <= 1}
+										>
+											← Prev
+										</button>
+										<span>Page {participantsPage} of {pagination.totalPages}</span>
+										<button
+											type="button"
+											onClick={() => showParticipantsView({ page: participantsPage + 1, group })}
+											disabled={tableBusy || participantsPage >= pagination.totalPages}
+										>
+											Next →
+										</button>
+									</nav>
+								)}
 							</section>
 						);
 					})}
@@ -1437,7 +1469,7 @@ export default function AdminPage() {
 							</button>
 						</div>
 						<p className="clear-data-warning" id="clear-data-warning">
-							This will permanently delete all {participants.length} participant records, including their scores and leaderboard results. This action cannot be undone.
+							This will permanently delete all {summary.total} participant records, including their scores and leaderboard results. This action cannot be undone.
 						</p>
 						<div className="clear-data-actions">
 							<button className="clear-data-cancel" type="button" onClick={() => setShowClearDataModal(false)} disabled={participantsDeleting}>Cancel</button>

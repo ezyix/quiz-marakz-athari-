@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import connectDB from "../../lib/mongodb";
 import Participant from "../../models/Participant";
-import Question from "../../models/Question";
 import QuizState from "../../models/QuizState";
 import {
   PARTICIPANT_COOKIE,
@@ -16,8 +15,128 @@ import {
   getCountries,
   parsePhoneNumberFromString,
 } from "libphonenumber-js";
+import {
+  QUIZ_STATE_KEY,
+  getQuizState,
+  getQuizStateVersion,
+} from "../../lib/quizState";
+import { getAnswerKey } from "../../lib/questionCache";
+import { limitFromEnv, rateLimit } from "../../lib/rateLimit";
 
-const QUIZ_STATE_KEY = "global";
+const DEFAULT_DURATION_SECONDS = 60;
+const SUBMIT_GRACE_SECONDS = 30;
+const DEFAULT_PAGE_LIMIT = 50;
+const MAX_PAGE_LIMIT = 200;
+
+// Same group rules as the admin leaderboard tabs.
+const GROUP_FILTERS = {
+  all: {},
+  male: { gender: "Male", age: { $gte: 13 } },
+  female: { gender: "Female", age: { $gte: 13 } },
+  kidsMale: { gender: "Male", age: { $lt: 13 } },
+  kidsFemale: { gender: "Female", age: { $lt: 13 } },
+};
+
+function clampInteger(value, fallback, min, max) {
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isFinite(parsed)) {
+    return fallback;
+  }
+  return Math.min(max, Math.max(min, parsed));
+}
+
+const isCompleted = { $eq: ["$status", "completed"] };
+const hasValidDuration = {
+  $and: [
+    isCompleted,
+    { $eq: [{ $type: "$startedAt" }, "date"] },
+    { $eq: [{ $type: "$completedAt" }, "date"] },
+    { $gte: ["$completedAt", "$startedAt"] },
+  ],
+};
+const completionDuration = { $subtract: ["$completedAt", "$startedAt"] };
+
+async function getParticipantSummary() {
+  const isAdult = { $gte: ["$age", 13] };
+  const isKid = { $lt: ["$age", 13] };
+  const isMale = { $eq: ["$gender", "Male"] };
+  const isFemale = { $eq: ["$gender", "Female"] };
+  const countIf = (condition) => ({ $sum: { $cond: [condition, 1, 0] } });
+
+  const [summary] = await Participant.aggregate([
+    {
+      $group: {
+        _id: null,
+        total: { $sum: 1 },
+        male: countIf({ $and: [isMale, isAdult] }),
+        female: countIf({ $and: [isFemale, isAdult] }),
+        kids: countIf(isKid),
+        kidsMale: countIf({ $and: [isKid, isMale] }),
+        kidsFemale: countIf({ $and: [isKid, isFemale] }),
+        inProgress: countIf({ $eq: ["$status", "attending"] }),
+        completed: countIf(isCompleted),
+        // $min ignores nulls.
+        fastestFinish: {
+          $min: { $cond: [hasValidDuration, completionDuration, null] },
+        },
+      },
+    },
+    { $project: { _id: 0 } },
+  ]);
+
+  return {
+    total: summary?.total ?? 0,
+    male: summary?.male ?? 0,
+    female: summary?.female ?? 0,
+    kids: summary?.kids ?? 0,
+    kidsMale: summary?.kidsMale ?? 0,
+    kidsFemale: summary?.kidsFemale ?? 0,
+    inProgress: summary?.inProgress ?? 0,
+    completed: summary?.completed ?? 0,
+    fastestFinish: summary?.fastestFinish ?? null,
+  };
+}
+
+// Leaderboard order: completed first, then highest score rate, then fastest
+// finish; in-progress participants stay newest first.
+async function getLeaderboardPage(match, requestedPage, limit) {
+  const total = await Participant.countDocuments(match);
+  const totalPages = Math.max(1, Math.ceil(total / limit));
+  const page = Math.min(requestedPage, totalPages);
+
+  const participants = await Participant.aggregate([
+    { $match: match },
+    {
+      $addFields: {
+        _rankCompleted: { $cond: [isCompleted, 0, 1] },
+        _rankScoreRate: {
+          $cond: [
+            { $and: [isCompleted, { $gt: ["$totalQuestions", 0] }] },
+            { $divide: ["$score", "$totalQuestions"] },
+            0,
+          ],
+        },
+        _rankDuration: {
+          $cond: [hasValidDuration, completionDuration, Number.MAX_SAFE_INTEGER],
+        },
+      },
+    },
+    {
+      $sort: {
+        _rankCompleted: 1,
+        _rankScoreRate: -1,
+        _rankDuration: 1,
+        createdAt: -1,
+        _id: -1,
+      },
+    },
+    { $skip: (page - 1) * limit },
+    { $limit: limit },
+    { $project: { _rankCompleted: 0, _rankScoreRate: 0, _rankDuration: 0 } },
+  ]);
+
+  return { participants, total, page, totalPages };
+}
 
 // ==========================================
 // GET
@@ -35,55 +154,53 @@ export async function GET(request) {
 
     await connectDB();
 
-    const participants = await Participant.find({})
-      .sort({ createdAt: -1 })
-      .lean();
+    const { searchParams } = new URL(request.url);
+    const all = searchParams.get("all") === "1";
+    const requestedGroup = searchParams.get("group") || "all";
+    const group = Object.prototype.hasOwnProperty.call(GROUP_FILTERS, requestedGroup)
+      ? requestedGroup
+      : "all";
+    const limit = clampInteger(searchParams.get("limit"), DEFAULT_PAGE_LIMIT, 1, MAX_PAGE_LIMIT);
+    const requestedPage = clampInteger(searchParams.get("page"), 1, 1, Number.MAX_SAFE_INTEGER);
 
-    const completed = participants.filter(
-      (participant) => participant.status === "completed"
-    );
+    const summaryPromise = getParticipantSummary();
 
-    const durations = completed
-      .filter(
-        (participant) =>
-          participant.startedAt && participant.completedAt
-      )
-      .map(
-        (participant) =>
-          new Date(participant.completedAt).getTime() -
-          new Date(participant.startedAt).getTime()
-      )
-      .filter((duration) => duration >= 0);
+    if (all) {
+      // Full export (PDF): newest first, same shape as before.
+      const [participants, summary] = await Promise.all([
+        Participant.find({}).sort({ createdAt: -1 }).lean(),
+        summaryPromise,
+      ]);
 
-    const fastestFinish = durations.length
-      ? Math.min(...durations)
-      : null;
+      return NextResponse.json({
+        success: true,
+        participants,
+        summary,
+        pagination: {
+          page: 1,
+          limit: participants.length,
+          total: participants.length,
+          totalPages: 1,
+          group: "all",
+        },
+      }, { headers: { "Cache-Control": "no-store" } });
+    }
+
+    const [leaderboard, summary] = await Promise.all([
+      getLeaderboardPage(GROUP_FILTERS[group], requestedPage, limit),
+      summaryPromise,
+    ]);
 
     return NextResponse.json({
       success: true,
-      participants,
-      summary: {
-        total: participants.length,
-        male: participants.filter(
-          (participant) => participant.gender === "Male" && participant.age >= 13
-        ).length,
-        female: participants.filter(
-          (participant) => participant.gender === "Female" && participant.age >= 13
-        ).length,
-        kids: participants.filter(
-          (participant) => participant.age < 13
-        ).length,
-        kidsMale: participants.filter(
-          (participant) => participant.age < 13 && participant.gender === "Male"
-        ).length,
-        kidsFemale: participants.filter(
-          (participant) => participant.age < 13 && participant.gender === "Female"
-        ).length,
-        inProgress: participants.filter(
-          (participant) => participant.status === "attending"
-        ).length,
-        completed: completed.length,
-        fastestFinish,
+      participants: leaderboard.participants,
+      summary,
+      pagination: {
+        page: leaderboard.page,
+        limit,
+        total: leaderboard.total,
+        totalPages: leaderboard.totalPages,
+        group,
       },
     }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
@@ -107,6 +224,18 @@ export async function GET(request) {
 
 export async function POST(request) {
   try {
+    // Generous default: many participants may share one venue Wi-Fi IP.
+    const limited = rateLimit(request, {
+      name: "register",
+      limit: limitFromEnv("RATE_LIMIT_REGISTER_PER_MIN", 300),
+    });
+    if (!limited.ok) {
+      return NextResponse.json(
+        { success: false, message: "Too many registration attempts. Please wait a moment and try again." },
+        { status: 429, headers: { "Retry-After": String(limited.retryAfter) } }
+      );
+    }
+
     if (!isSameOriginRequest(request)) {
       return NextResponse.json(
         { success: false, message: "Cross-origin request denied." },
@@ -116,9 +245,7 @@ export async function POST(request) {
 
     await connectDB();
 
-    const quizState = await QuizState.findOne({ key: QUIZ_STATE_KEY })
-      .select("isStarted")
-      .lean();
+    const quizState = await getQuizState();
     if (!quizState?.isStarted) {
       return NextResponse.json(
         { success: false, message: "Registration is closed." },
@@ -341,52 +468,65 @@ export async function PATCH(request) {
     }
 
     await connectDB();
-    const participant =
-      await Participant.findOne({
-        participantId,
-      });
-
-    if (!participant) {
-      return NextResponse.json(
-        {
-          success: false,
-          message: "Participant not found.",
-        },
-        {
-          status: 404,
-        }
-      );
-    }
-
-    if (participant.status === "completed") {
-      return NextResponse.json(
-        { success: false, message: "This quiz has already been submitted." },
-        { status: 409 }
-      );
-    }
-
-    const questions = await Question.find({})
-      .select("answer")
-      .lean();
-    if (!questions.length) {
+    const quizState = await getQuizState();
+    const answerKey = await getAnswerKey(getQuizStateVersion(quizState));
+    if (!answerKey.total) {
       return NextResponse.json(
         { success: false, message: "The quiz has no questions." },
         { status: 409 }
       );
     }
 
-    const score = questions.reduce((total, question) => {
-      return submittedAnswers.get(String(question._id)) === question.answer
-        ? total + 1
-        : total;
-    }, 0);
+    let score = 0;
+    for (const [questionId, correctAnswer] of answerKey.answers) {
+      if (submittedAnswers.get(questionId) === correctAnswer) {
+        score += 1;
+      }
+    }
 
-    participant.status = "completed";
-    participant.completedAt = new Date();
-    participant.score = score;
-    participant.totalQuestions = questions.length;
+    const completedAt = new Date();
+    const durationSeconds = quizState?.durationSeconds ?? DEFAULT_DURATION_SECONDS;
+    const onTimeSince = new Date(
+      completedAt.getTime() - (durationSeconds + SUBMIT_GRACE_SECONDS) * 1000
+    );
+    const completion = {
+      status: "completed",
+      completedAt,
+      score,
+      totalQuestions: answerKey.total,
+    };
+    const updateOptions = { returnDocument: "after" };
 
-    await participant.save();
+    // Atomic: only an "attending" participant can be completed, once.
+    // Common case (on time) is a single query.
+    let participant = await Participant.findOneAndUpdate(
+      {
+        participantId,
+        status: "attending",
+        $or: [
+          { startedAt: { $gte: onTimeSince } },
+          { startedAt: null },
+        ],
+      },
+      { ...completion, late: false },
+      updateOptions
+    ).lean();
+
+    if (!participant) {
+      // Past the time limit + grace: still record answers, but flag as late.
+      participant = await Participant.findOneAndUpdate(
+        { participantId, status: "attending" },
+        { ...completion, late: true },
+        updateOptions
+      ).lean();
+    }
+
+    if (!participant) {
+      return NextResponse.json(
+        { success: false, message: "This quiz has already been submitted or the participant was not found." },
+        { status: 409 }
+      );
+    }
 
     const response = NextResponse.json({
       success: true,
@@ -402,6 +542,8 @@ export async function PATCH(request) {
           participant.totalQuestions,
         completedAt:
           participant.completedAt,
+        late:
+          participant.late,
       },
     });
 

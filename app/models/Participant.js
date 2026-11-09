@@ -60,6 +60,12 @@ const ParticipantSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
+
+    // Submitted after the time limit (+ grace); answers were still scored.
+    late: {
+      type: Boolean,
+      default: false,
+    },
   },
   {
     timestamps: true,
@@ -70,13 +76,17 @@ ParticipantSchema.index(
   { fullName: 1, whatsapp: 1 },
   { unique: true, name: "unique_participant_name_whatsapp" }
 );
+ParticipantSchema.index({ createdAt: -1 });
 
 const existingParticipant = mongoose.models.Participant;
 const hasNamePhoneIndex = existingParticipant?.schema.indexes().some(
   ([fields, options]) =>
     options.unique && fields.fullName === 1 && fields.whatsapp === 1
 );
-if (existingParticipant && !hasNamePhoneIndex) {
+if (
+  existingParticipant &&
+  (!hasNamePhoneIndex || !existingParticipant.schema.path("late"))
+) {
   mongoose.deleteModel("Participant");
 }
 

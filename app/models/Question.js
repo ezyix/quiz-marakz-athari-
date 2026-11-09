@@ -27,6 +27,8 @@ const QuestionSchema = new mongoose.Schema(
   }
 );
 
+QuestionSchema.index({ createdAt: 1, _id: 1 });
+
 const Question =
   mongoose.models.Question || mongoose.model("Question", QuestionSchema);
 
