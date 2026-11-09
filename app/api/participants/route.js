@@ -21,6 +21,7 @@ import {
   getQuizStateVersion,
 } from "../../lib/quizState";
 import { getAnswerKey } from "../../lib/questionCache";
+import { limitFromEnv, rateLimit } from "../../lib/rateLimit";
 
 const DEFAULT_DURATION_SECONDS = 60;
 const SUBMIT_GRACE_SECONDS = 30;
@@ -223,6 +224,18 @@ export async function GET(request) {
 
 export async function POST(request) {
   try {
+    // Generous default: many participants may share one venue Wi-Fi IP.
+    const limited = rateLimit(request, {
+      name: "register",
+      limit: limitFromEnv("RATE_LIMIT_REGISTER_PER_MIN", 300),
+    });
+    if (!limited.ok) {
+      return NextResponse.json(
+        { success: false, message: "Too many registration attempts. Please wait a moment and try again." },
+        { status: 429, headers: { "Retry-After": String(limited.retryAfter) } }
+      );
+    }
+
     if (!isSameOriginRequest(request)) {
       return NextResponse.json(
         { success: false, message: "Cross-origin request denied." },

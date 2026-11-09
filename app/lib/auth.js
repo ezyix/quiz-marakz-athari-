@@ -7,6 +7,7 @@ export const PARTICIPANT_COOKIE = "quiz_participant_session";
 const SESSION_ISSUER = "al-markazul-athari-quiz";
 const ADMIN_SESSION_SECONDS = 8 * 60 * 60;
 const PARTICIPANT_SESSION_SECONDS = 24 * 60 * 60;
+const ADMIN_PASSWORD_MIN_LENGTH = 12;
 
 function getSecret(name) {
   const secret = process.env[name];
@@ -79,7 +80,7 @@ export function verifyAdminCredentials(email, password) {
   if (
     !configuredEmail ||
     !configuredPassword ||
-    configuredPassword.length < 5 ||
+    configuredPassword.length < ADMIN_PASSWORD_MIN_LENGTH ||
     !getSecret("ADMIN_SESSION_SECRET") ||
     typeof email !== "string" ||
     typeof password !== "string"
@@ -95,7 +96,7 @@ export function hasAdminAuthConfiguration() {
   return Boolean(
     process.env.ADMIN_EMAIL?.trim() &&
     process.env.ADMIN_PASSWORD &&
-    process.env.ADMIN_PASSWORD.length >= 5 &&
+    process.env.ADMIN_PASSWORD.length >= ADMIN_PASSWORD_MIN_LENGTH &&
     getSecret("ADMIN_SESSION_SECRET")
   );
 }

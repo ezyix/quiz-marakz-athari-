@@ -8,8 +8,20 @@ import {
   sessionCookieOptions,
   verifyAdminCredentials,
 } from "../../../lib/auth";
+import { limitFromEnv, rateLimit } from "../../../lib/rateLimit";
 
 export async function POST(request) {
+  const limited = rateLimit(request, {
+    name: "admin-login",
+    limit: limitFromEnv("RATE_LIMIT_LOGIN_PER_MIN", 5),
+  });
+  if (!limited.ok) {
+    return NextResponse.json(
+      { success: false, message: "Too many sign-in attempts. Please wait a minute and try again." },
+      { status: 429, headers: { "Retry-After": String(limited.retryAfter) } }
+    );
+  }
+
   if (!isSameOriginRequest(request)) {
     return NextResponse.json(
       { success: false, message: "Cross-origin request denied." },
