@@ -26,7 +26,10 @@ const StudyPdfViewer = dynamic(() => import("./StudyPdfViewer"), {
   ),
 });
 
-const studyMaterialDeadline = new Date("2026-11-29T10:00:00+05:30").getTime();
+const STATUS_POLL_BASE_MS = 15000;
+const STATUS_POLL_JITTER_MS = 3000;
+
+const studyMaterialDeadline =new Date("2026-11-29T10:00:00+05:30").getTime();
 
 const primaryPhoneRegions = {
   "1": "US",
@@ -115,14 +118,39 @@ export default function LoadingPage() {
       setLoading(false);
     }, 5000);
 
-    const poller = setInterval(() => {
-      refreshQuizStatus();
-    }, 10000);
+    // Poll every 15s ± 3s (jitter spreads load); pause while the tab is hidden.
+    let pollTimeout;
+    let pollingStopped = false;
+    const schedulePoll = () => {
+      clearTimeout(pollTimeout);
+      if (pollingStopped) {
+        return;
+      }
+      const delay =
+        STATUS_POLL_BASE_MS + (Math.random() * 2 - 1) * STATUS_POLL_JITTER_MS;
+      pollTimeout = setTimeout(async () => {
+        if (!document.hidden) {
+          await refreshQuizStatus();
+        }
+        schedulePoll();
+      }, delay);
+    };
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        refreshQuizStatus();
+        schedulePoll();
+      }
+    };
+
+    schedulePoll();
+    document.addEventListener("visibilitychange", handleVisibilityChange);
 
     return () => {
+      pollingStopped = true;
       clearTimeout(timer);
-      clearInterval(poller);
+      clearTimeout(pollTimeout);
       clearInterval(progressInterval);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, []);
 
