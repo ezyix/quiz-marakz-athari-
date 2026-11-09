@@ -3,12 +3,22 @@ import connectDB from "../../lib/mongodb";
 import Question from "../../models/Question";
 import QuizState from "../../models/QuizState";
 import { isAdminRequest, isSameOriginRequest } from "../../lib/auth";
-import { QUIZ_STATE_KEY, getQuizState } from "../../lib/quizState";
+import {
+  QUIZ_STATE_KEY,
+  getQuizState,
+  getQuizStateVersion,
+} from "../../lib/quizState";
+import {
+  getQuestions,
+  invalidateQuestionCaches,
+} from "../../lib/questionCache";
 
+// Varies by admin cookie: never CDN-cache this endpoint.
 export async function GET(request) {
   try {
     await connectDB();
     const isAdmin = isAdminRequest(request);
+    let version = 0;
     if (!isAdmin) {
       const quizState = await getQuizState();
 
@@ -18,15 +28,11 @@ export async function GET(request) {
           { status: 409, headers: { "Cache-Control": "no-store" } }
         );
       }
+
+      version = getQuizStateVersion(quizState);
     }
 
-    const questionQuery = Question.find({});
-    if (!isAdmin) {
-      questionQuery.select("-answer");
-    }
-    const questions = await questionQuery
-      .sort({ createdAt: 1, _id: 1 })
-      .lean();
+    const questions = await getQuestions({ isAdmin, version });
 
     return NextResponse.json(
       { success: true, questions },
@@ -92,6 +98,7 @@ export async function POST(request) {
     }
 
     const createdQuestion = await Question.create({ question, options, answer });
+    await invalidateQuestionCaches();
 
     return NextResponse.json(
       { success: true, question: createdQuestion.toObject() },
@@ -136,6 +143,7 @@ export async function DELETE(request) {
     }
 
     const result = await Question.deleteMany({});
+    await invalidateQuestionCaches();
 
     return NextResponse.json({
       success: true,
