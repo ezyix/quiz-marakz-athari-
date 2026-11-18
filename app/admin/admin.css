@@ -338,7 +338,7 @@
   .admin-header img + img { max-width: 82px; }
   .admin-header-actions { gap: 6px; }
   .admin-install-button { min-height: 36px; gap: 5px; padding: 0 8px; font-size: 10px; }
-  .admin-install-logo { width: 22px; height: 22px; }
+  .admin-install-logo { width: 42px; height: 42px; }
   .admin-signout { padding: 7px 11px; font-size: 12px; }
   .admin-install-area { margin-top: 18px; padding-top: 14px; }
   .admin-install-button { min-height: 42px; padding: 0 14px; font-size: 12px; }

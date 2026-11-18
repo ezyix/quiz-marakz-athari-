@@ -1301,7 +1301,7 @@ export default function AdminPage() {
 								<div className="admin-install-icon-wrap" aria-hidden="true">
 									<Image
 										className="admin-install-logo"
-										src="/logo.png"
+										src="/quiz-app-icon.png"
 										alt=""
 										width={42}
 										height={42}

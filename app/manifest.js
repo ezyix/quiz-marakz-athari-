@@ -9,8 +9,8 @@ export default function manifest() {
     theme_color: "#397fcf",
     icons: [
       {
-        src: "/logo.png",
-        sizes: "706x803",
+        src: "/quiz-app-icon.png",
+        sizes: "768x768",
         type: "image/png",
       },
       {
