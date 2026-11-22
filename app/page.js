@@ -421,34 +421,17 @@ export default function LoadingPage() {
           </p>
 
           <div className="study-countdown" aria-live="polite">
-            <p className="study-countdown-label">
+           
+                        <p className="study-countdown-label">
               <svg viewBox="0 0 48 48" aria-hidden="true">
                 <circle cx="24" cy="24" r="19" />
                 <path d="M24 13v12l9 5" />
               </svg>
-              <span>Time </span>
-            </p>
-
-            <p className="study-deadline">
-              <span className="study-deadline-rule" aria-hidden="true" />
-              
-              <span> INDIA 07:45 PM  ---- 10:45 PM</span>
-                <span> SAUDI 05:15 PM  ---- 8:15 PM</span>
-              <span className="study-deadline-rule" aria-hidden="true" />
+              <span>QUIZ ENDED </span>
             </p>
             
           </div>
-  <p className="study-intro">
-            പ്രത്യേക ശ്രദ്ധയ്ക്ക് :
-          </p>
-            <p className="study-intro">
-* ഒരാൾക്ക് ഒരു തവണ മാത്രമേ ക്വിസിൽ പ്രവേശിക്കാൻ സാധിക്കൂ.          </p>
-         
-           <p className="study-intro">
-* ക്വിസ് ആരംഭിച്ചുകഴിഞ്ഞാൽ പൂർത്തിയാക്കാതെ ബാക്ക് പോകാനോ പുറത്തിറങ്ങാനോ പാടില്ല; അങ്ങനെ ചെയ്താൽ നിങ്ങളുടെ എൻട്രി അസാധുവാകും.          </p>
-       
-         <p className="study-intro">
-*  പേര്, ഫോൺ നമ്പർ തുടങ്ങിയ വിവരങ്ങൾ കൃത്യമായി രേഖപ്പെടുത്തുക.          </p>
+
         </section>
       </main>
     );
