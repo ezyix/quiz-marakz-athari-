@@ -16,7 +16,7 @@ import {
 const STATUS_POLL_BASE_MS = 15000;
 const STATUS_POLL_JITTER_MS = 3000;
 
-const studyMaterialDeadline =new Date("2026-11-29T10:00:00+05:30").getTime();
+const studyMaterialDeadline = new Date("2026-12-06T10:00:00+05:30").getTime();
 
 const primaryPhoneRegions = {
   "1": "US",
@@ -409,29 +409,149 @@ export default function LoadingPage() {
               {studyToastMessage}
             </div>
           )}
-          <p className="study-eyebrow"style={{ textAlign: "right", width: "100%" }}>​ الدروس المهمة لعامة الأمة</p>
-          <h1 id="study-title" dir="rtl" lang="ar" style={{ textAlign: "right", width: "100%" }}>
-  <p className="study-intro">
-            പൊതുജനങ്ങൾക്ക് വേണ്ടിയുള്ള സുപ്രധാന പാഠങ്ങൾ
-          </p>
-</h1>
-
+          <p className="study-eyebrow">STUDY MATERIAL</p>
+          <h1 id="study-title">Prepare for the quiz</h1>
           <p className="study-intro">
-         21/11/26 ന് നടന്ന ദർസ് അടിസ്ഥാനമാക്കിയുള്ള ക്വിസ് മത്സരം 
+            Review the material below before the quiz begins.
           </p>
 
           <div className="study-countdown" aria-live="polite">
-           
-                        <p className="study-countdown-label">
+            <p className="study-countdown-label">
               <svg viewBox="0 0 48 48" aria-hidden="true">
                 <circle cx="24" cy="24" r="19" />
                 <path d="M24 13v12l9 5" />
               </svg>
-              <span>QUIZ ENDED </span>
+              <span>Time remaining</span>
             </p>
-            
+            {remainingSeconds === null ? (
+              <p className="study-countdown-value">Loading timer…</p>
+            ) : remainingSeconds === 0 ? (
+              <p className="study-countdown-value">Study period has ended</p>
+            ) : (
+              <div className="study-countdown-units">
+                {[
+                  ["Days", Math.floor(remainingSeconds / 86400), "calendar"],
+                  ["Hours", Math.floor((remainingSeconds % 86400) / 3600), "clock"],
+                  ["Minutes", Math.floor((remainingSeconds % 3600) / 60), "stopwatch"],
+                  ["Seconds", remainingSeconds % 60, "fast"],
+                ].map(([label, value, unit]) => (
+                  <div
+                    className={`study-countdown-unit study-countdown-unit-${unit}`}
+                    key={label}
+                  >
+                    <span className="study-countdown-unit-icon" aria-hidden="true">
+                      {unit === "calendar" ? (
+                        <svg viewBox="0 0 32 32">
+                          <rect x="5" y="7" width="22" height="20" rx="3" />
+                          <path d="M10 4v6M22 4v6M5 13h22" />
+                        </svg>
+                      ) : unit === "clock" ? (
+                        <svg viewBox="0 0 32 32">
+                          <circle cx="16" cy="17" r="11" />
+                          <path d="M16 10v7l5 3" />
+                        </svg>
+                      ) : (
+                        <svg viewBox="0 0 32 32">
+                          <circle cx="16" cy="18" r="10" />
+                          <path d="M16 12v6l-3 3M13 4h6M16 4v4M23 9l2-2" />
+                          {unit === "fast" && <path d="M2 13h3M1 18h3M2 23h3" />}
+                        </svg>
+                      )}
+                    </span>
+                    <span>{String(value).padStart(2, "0")}</span>
+                    <small>{label}</small>
+                  </div>
+                ))}
+              </div>
+            )}
+            <p className="study-deadline">
+              <span className="study-deadline-rule" aria-hidden="true" />
+              <svg viewBox="0 0 32 32" aria-hidden="true">
+                <rect x="4" y="7" width="24" height="21" rx="4" />
+                <path d="M10 3v8M22 3v8M4 14h24M10 19h.01M16 19h.01M22 19h.01M10 24h.01M16 24h.01" />
+              </svg>
+              <span>ONLINE - 06 December 2026 at 10:00 AM</span>
+              <span className="study-deadline-rule" aria-hidden="true" />
+            </p>
           </div>
 
+          {remainingSeconds === 0 ? (
+            <div className="study-expired" role="status">
+              The study-material period has ended.
+            </div>
+          ) : (
+            <div className="study-viewer-shell">
+              {captureGuardActive && (
+                <div className="study-capture-guard" role="status">
+                  Study material hidden
+                </div>
+              )}
+              <StudyPdfViewer />
+              <div className="study-watermark" aria-hidden="true">
+                AL-MARKAZUL-ATHARI · STUDY MATERIAL
+              </div>
+            </div>
+          )}
+          {remainingSeconds !== 0 && (
+            <>
+              <div className="study-open-pdf-section">
+                <a
+                  className="study-download-button study-open-pdf-button"
+                  href="/Fathiha.pdf"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  Open PDF to Read More
+                </a>
+              </div>
+              <div className="study-download-section">
+                <a
+                  className="study-download-button"
+                  href="/Fathiha.pdf"
+                  download="Fathiha.pdf"
+                  onClick={() => showStudyToast("PDF downloading...")}
+                >
+                  <svg
+                    className="study-action-icon"
+                    aria-hidden="true"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M12 3v12" />
+                    <path d="m7 10 5 5 5-5" />
+                    <path d="M5 17v3h14v-3" />
+                  </svg>
+                  Download PDF
+                </a>
+                <button
+                  className="study-download-button study-share-button"
+                  type="button"
+                  onClick={handleShareStudyPdf}
+                >
+                  <svg
+                    className="study-action-icon"
+                    aria-hidden="true"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <circle cx="18" cy="5" r="3" />
+                    <circle cx="6" cy="12" r="3" />
+                    <circle cx="18" cy="19" r="3" />
+                    <path d="m8.7 10.7 6.6-4.4M8.7 13.3l6.6 4.4" />
+                  </svg>
+                  Share PDF
+                </button>
+              </div>
+            </>
+          )}
         </section>
       </main>
     );
@@ -592,30 +712,17 @@ export default function LoadingPage() {
               }
             }}
           >
-            <div className="form-error-modal-heading">
-              <span className="form-error-modal-icon" aria-hidden="true">
-                !
-              </span>
-              <div>
-                <p className="form-error-modal-eyebrow">Registration issue</p>
-                <h2 id="form-error-title">
-                  {error.includes("already been used")
-                    ? "Already registered"
-                    : "Let’s get you started"}
-                </h2>
-              </div>
-            </div>
+            <h2 id="form-error-title">Unable to start the quiz</h2>
             <p id="form-error-message" className="quiz-error form-error-modal-message">
               {error}
             </p>
-            <br/> 
             <button
               className="next-button form-error-modal-button"
               type="button"
               autoFocus
               onClick={() => setError("")}
             >
-              Got it
+              OK
             </button>
           </section>
         </div>
