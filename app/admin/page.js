@@ -70,6 +70,47 @@ function getTimeTaken(startedAt, completedAt) {
 	return "In progress";
 }
 
+function getCompletedDuration(participant) {
+	if (!participant.startedAt || !participant.completedAt) {
+		return Number.POSITIVE_INFINITY;
+	}
+
+	const start = new Date(participant.startedAt).getTime();
+	const end = new Date(participant.completedAt).getTime();
+	return Number.isFinite(start) && Number.isFinite(end) && end >= start
+		? end - start
+		: Number.POSITIVE_INFINITY;
+}
+
+function sortParticipantsForPdf(participants) {
+	return [...participants].sort((first, second) => {
+		const firstCompleted = first.status === "completed";
+		const secondCompleted = second.status === "completed";
+		if (firstCompleted !== secondCompleted) {
+			return firstCompleted ? -1 : 1;
+		}
+
+		if (firstCompleted) {
+			const scoreDifference =
+				(Number(second.score) || 0) - (Number(first.score) || 0);
+			if (scoreDifference !== 0) {
+				return scoreDifference;
+			}
+
+			const firstDuration = getCompletedDuration(first);
+			const secondDuration = getCompletedDuration(second);
+			if (firstDuration !== secondDuration) {
+				return firstDuration < secondDuration ? -1 : 1;
+			}
+		}
+
+		const firstCreatedAt = new Date(first.createdAt || 0).getTime();
+		const secondCreatedAt = new Date(second.createdAt || 0).getTime();
+		return (Number.isFinite(secondCreatedAt) ? secondCreatedAt : 0) -
+			(Number.isFinite(firstCreatedAt) ? firstCreatedAt : 0);
+	});
+}
+
 async function createParticipantsPdf(participants) {
 	const logoResponse = await fetch("/logo.png");
 	if (!logoResponse.ok) {
@@ -835,7 +876,9 @@ export default function AdminPage() {
 				throw new Error(data.message || "Failed to load participants.");
 			}
 
-			const pdf = await createParticipantsPdf(data.participants || []);
+			const pdf = await createParticipantsPdf(
+				sortParticipantsForPdf(data.participants || [])
+			);
 			const url = URL.createObjectURL(pdf);
 			const link = document.createElement("a");
 			link.href = url;
