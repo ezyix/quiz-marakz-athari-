@@ -2,7 +2,7 @@
   "crons": [
     {
       "path": "/api/quiz-expire",
-      "schedule": "* * * * *"
+      "schedule": "0 0 * * *"
     }
   ]
 }
