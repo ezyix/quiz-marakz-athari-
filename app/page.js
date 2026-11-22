@@ -625,7 +625,7 @@ export default function LoadingPage() {
             <p id="form-error-message" className="quiz-error form-error-modal-message">
               {error}
             </p>
-            <br/>
+            <br/> 
             <button
               className="next-button form-error-modal-button"
               type="button"
