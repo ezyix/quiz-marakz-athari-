@@ -98,6 +98,8 @@ function QuizPageContent() {
 
   const [error, setError] = useState("");
 
+  const [showQuitConfirmation, setShowQuitConfirmation] = useState(false);
+
   // ==========================================
   // Load participant
   // ==========================================
@@ -200,23 +202,12 @@ function QuizPageContent() {
     };
 
     const handlePopState = () => {
-      const shouldQuit = window.confirm(
-        "would you like to quit the quiz"
-      );
-
-      if (shouldQuit) {
-        localStorage.removeItem(
-          "quizParticipant"
-        );
-        router.replace("/");
-        return;
-      }
-
       window.history.pushState(
         null,
         "",
         window.location.href
       );
+      setShowQuitConfirmation(true);
     };
 
     window.history.pushState(
@@ -678,6 +669,46 @@ function QuizPageContent() {
         </div>
 
       </section>
+
+      {showQuitConfirmation && (
+        <div className="quiz-confirm-modal-backdrop">
+          <section
+            className="quiz-confirm-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="quit-quiz-title"
+            aria-describedby="quit-quiz-description"
+            onKeyDown={(event) => {
+              if (event.key === "Escape") {
+                setShowQuitConfirmation(false);
+              }
+            }}
+          >
+            <h2 id="quit-quiz-title">Quit the quiz?</h2>
+            <p id="quit-quiz-description">Would you like to quit the quiz?</p>
+            <div className="quiz-confirm-modal-actions">
+              <button
+                className="previous-button"
+                type="button"
+                autoFocus
+                onClick={() => setShowQuitConfirmation(false)}
+              >
+                Cancel
+              </button>
+              <button
+                className="next-button"
+                type="button"
+                onClick={() => {
+                  localStorage.removeItem("quizParticipant");
+                  router.replace("/");
+                }}
+              >
+                OK
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
 
     </main>
   );

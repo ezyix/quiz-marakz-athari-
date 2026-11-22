@@ -684,14 +684,6 @@ export default function LoadingPage() {
             />
           </div>
 
-          {/* Error */}
-
-          {error && (
-            <p className="quiz-error form-error">
-              {error}
-            </p>
-          )}
-
           {/* Start */}
 
           <button
@@ -705,6 +697,36 @@ export default function LoadingPage() {
           </button>
         </form>
       </section>
+
+      {error && (
+        <div className="form-error-modal-backdrop">
+          <section
+            className="form-error-modal"
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="form-error-title"
+            aria-describedby="form-error-message"
+            onKeyDown={(event) => {
+              if (event.key === "Escape") {
+                setError("");
+              }
+            }}
+          >
+            <h2 id="form-error-title">Unable to start the quiz</h2>
+            <p id="form-error-message" className="quiz-error form-error-modal-message">
+              {error}
+            </p>
+            <button
+              className="next-button form-error-modal-button"
+              type="button"
+              autoFocus
+              onClick={() => setError("")}
+            >
+              OK
+            </button>
+          </section>
+        </div>
+      )}
     </main>
   );
 }
