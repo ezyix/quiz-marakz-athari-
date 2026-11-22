@@ -18,13 +18,17 @@ import {
 import {
   QUIZ_STATE_KEY,
   getQuizState,
-  getQuizStateVersion,
 } from "../../lib/quizState";
-import { getAnswerKey } from "../../lib/questionCache";
 import { limitFromEnv, rateLimit } from "../../lib/rateLimit";
+import {
+  completeParticipant,
+  expireParticipants,
+  reconcileParticipant,
+  saveParticipantAnswer,
+  answersAsObject,
+} from "../../lib/quizCompletion";
 
 const DEFAULT_DURATION_SECONDS = 60;
-const SUBMIT_GRACE_SECONDS = 30;
 const DEFAULT_PAGE_LIMIT = 50;
 const MAX_PAGE_LIMIT = 200;
 
@@ -145,14 +149,60 @@ async function getLeaderboardPage(match, requestedPage, limit) {
 
 export async function GET(request) {
   try {
+    await connectDB();
+    const quizState = await getQuizState();
+    await expireParticipants();
+
+    const participantId = getParticipantId(request);
     if (!isAdminRequest(request)) {
+      if (!participantId) {
+        return NextResponse.json(
+          { success: false, message: "Participant session required." },
+          { status: 401 }
+        );
+      }
+
+      const participant = await reconcileParticipant(participantId);
+      if (!participant) {
+        return NextResponse.json(
+          { success: false, message: "Participant not found." },
+          { status: 404 }
+        );
+      }
+
+      const expiresAt = participant.expiresAt
+        ? new Date(participant.expiresAt)
+        : new Date(
+            new Date(participant.startedAt).getTime() +
+              (quizState?.durationSeconds ?? DEFAULT_DURATION_SECONDS) *
+                1000
+          );
+      const remainingSeconds =
+        participant.status === "completed"
+          ? 0
+          : Math.max(0, Math.ceil((expiresAt.getTime() - Date.now()) / 1000));
+
       return NextResponse.json(
-        { success: false, message: "Admin authentication required." },
-        { status: 401 }
+        {
+          success: true,
+          participant: {
+            participantId: participant.participantId,
+            fullName: participant.fullName,
+            status: participant.status,
+            score: participant.score,
+            totalQuestions: participant.totalQuestions,
+            startedAt: participant.startedAt,
+            expiresAt,
+            completedAt: participant.completedAt,
+            late: participant.late,
+            completionReason: participant.completionReason,
+            remainingSeconds,
+            answers: answersAsObject(participant.answers),
+          },
+        },
+        { headers: { "Cache-Control": "no-store" } }
       );
     }
-
-    await connectDB();
 
     const { searchParams } = new URL(request.url);
     const all = searchParams.get("all") === "1";
@@ -356,6 +406,10 @@ export async function POST(request) {
 
     // Create participant
 
+    const startedAt = new Date();
+    const durationSeconds =
+      quizState?.durationSeconds ?? DEFAULT_DURATION_SECONDS;
+
     const participant =
       await Participant.create({
         participantId,
@@ -364,7 +418,9 @@ export async function POST(request) {
         age: Number(age),
         whatsapp: parsedPhone.number,
         status: "attending",
-        startedAt: new Date(),
+        startedAt,
+        expiresAt: new Date(startedAt.getTime() + durationSeconds * 1000),
+        answers: {},
       });
 
     const response = NextResponse.json(
@@ -380,6 +436,8 @@ export async function POST(request) {
             participant.status,
           startedAt:
             participant.startedAt,
+          expiresAt:
+            participant.expiresAt,
         },
       },
       {
@@ -443,6 +501,52 @@ export async function PATCH(request) {
     }
 
     const body = await request.json();
+    await connectDB();
+
+    if (body?.action === "saveAnswer") {
+      if (
+        typeof body.questionId !== "string" ||
+        typeof body.answer !== "string" ||
+        body.answer.length > 500
+      ) {
+        return NextResponse.json(
+          { success: false, message: "Invalid answer." },
+          { status: 400 }
+        );
+      }
+
+      const saved = await saveParticipantAnswer(
+        participantId,
+        body.questionId,
+        body.answer
+      );
+
+      if (!saved.participant) {
+        return NextResponse.json(
+          { success: false, message: "Participant not found." },
+          { status: 404 }
+        );
+      }
+      if (saved.reason === "invalid-question") {
+        return NextResponse.json(
+          { success: false, message: "Invalid question." },
+          { status: 400 }
+        );
+      }
+
+      return NextResponse.json({
+        success: true,
+        participant: {
+          participantId: saved.participant.participantId,
+          status: saved.participant.status,
+          score: saved.participant.score,
+          totalQuestions: saved.participant.totalQuestions,
+          completedAt: saved.participant.completedAt,
+          expiresAt: saved.participant.expiresAt,
+        },
+      });
+    }
+
     if (!Array.isArray(body?.answers) || body.answers.length > 500) {
       return NextResponse.json(
         { success: false, message: "Invalid quiz answers." },
@@ -450,77 +554,24 @@ export async function PATCH(request) {
       );
     }
 
-    const submittedAnswers = new Map();
+    const submittedAnswers = {};
     for (const answer of body.answers) {
       if (
         !answer ||
         typeof answer.questionId !== "string" ||
         typeof answer.answer !== "string" ||
-        submittedAnswers.has(answer.questionId)
+        submittedAnswers[answer.questionId] !== undefined
       ) {
         return NextResponse.json(
           { success: false, message: "Invalid quiz answers." },
           { status: 400 }
         );
       }
-
-      submittedAnswers.set(answer.questionId, answer.answer);
+      submittedAnswers[answer.questionId] = answer.answer;
     }
 
-    await connectDB();
-    const quizState = await getQuizState();
-    const answerKey = await getAnswerKey(getQuizStateVersion(quizState));
-    if (!answerKey.total) {
-      return NextResponse.json(
-        { success: false, message: "The quiz has no questions." },
-        { status: 409 }
-      );
-    }
-
-    let score = 0;
-    for (const [questionId, correctAnswer] of answerKey.answers) {
-      if (submittedAnswers.get(questionId) === correctAnswer) {
-        score += 1;
-      }
-    }
-
-    const completedAt = new Date();
-    const durationSeconds = quizState?.durationSeconds ?? DEFAULT_DURATION_SECONDS;
-    const onTimeSince = new Date(
-      completedAt.getTime() - (durationSeconds + SUBMIT_GRACE_SECONDS) * 1000
-    );
-    const completion = {
-      status: "completed",
-      completedAt,
-      score,
-      totalQuestions: answerKey.total,
-    };
-    const updateOptions = { returnDocument: "after" };
-
-    // Atomic: only an "attending" participant can be completed, once.
-    // Common case (on time) is a single query.
-    let participant = await Participant.findOneAndUpdate(
-      {
-        participantId,
-        status: "attending",
-        $or: [
-          { startedAt: { $gte: onTimeSince } },
-          { startedAt: null },
-        ],
-      },
-      { ...completion, late: false },
-      updateOptions
-    ).lean();
-
-    if (!participant) {
-      // Past the time limit + grace: still record answers, but flag as late.
-      participant = await Participant.findOneAndUpdate(
-        { participantId, status: "attending" },
-        { ...completion, late: true },
-        updateOptions
-      ).lean();
-    }
-
+    const result = await completeParticipant(participantId, submittedAnswers);
+    const participant = result.participant;
     if (!participant) {
       return NextResponse.json(
         { success: false, message: "This quiz has already been submitted or the participant was not found." },

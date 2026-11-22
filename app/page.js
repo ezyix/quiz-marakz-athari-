@@ -609,17 +609,30 @@ export default function LoadingPage() {
               }
             }}
           >
-            <h2 id="form-error-title">Unable to start the quiz</h2>
+            <div className="form-error-modal-heading">
+              <span className="form-error-modal-icon" aria-hidden="true">
+                !
+              </span>
+              <div>
+                <p className="form-error-modal-eyebrow">Registration issue</p>
+                <h2 id="form-error-title">
+                  {error.includes("already been used")
+                    ? "Already registered"
+                    : "Let’s get you started"}
+                </h2>
+              </div>
+            </div>
             <p id="form-error-message" className="quiz-error form-error-modal-message">
               {error}
             </p>
+            <br/>
             <button
               className="next-button form-error-modal-button"
               type="button"
               autoFocus
               onClick={() => setError("")}
             >
-              OK
+              Got it
             </button>
           </section>
         </div>

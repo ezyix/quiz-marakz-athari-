@@ -46,9 +46,21 @@ const ParticipantSchema = new mongoose.Schema(
       default: Date.now,
     },
 
+    expiresAt: {
+      type: Date,
+      default: null,
+      index: true,
+    },
+
     completedAt: {
       type: Date,
       default: null,
+    },
+
+    answers: {
+      type: Map,
+      of: String,
+      default: {},
     },
 
     score: {
@@ -65,6 +77,12 @@ const ParticipantSchema = new mongoose.Schema(
     late: {
       type: Boolean,
       default: false,
+    },
+
+    completionReason: {
+      type: String,
+      enum: ["manual", "timeout", null],
+      default: null,
     },
   },
   {
@@ -85,7 +103,11 @@ const hasNamePhoneIndex = existingParticipant?.schema.indexes().some(
 );
 if (
   existingParticipant &&
-  (!hasNamePhoneIndex || !existingParticipant.schema.path("late"))
+  (!hasNamePhoneIndex ||
+    !existingParticipant.schema.path("late") ||
+    !existingParticipant.schema.path("expiresAt") ||
+    !existingParticipant.schema.path("answers") ||
+    !existingParticipant.schema.path("completionReason"))
 ) {
   mongoose.deleteModel("Participant");
 }

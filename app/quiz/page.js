@@ -92,6 +92,10 @@ function QuizPageContent() {
 
   const [timerSettingsLoaded, setTimerSettingsLoaded] = useState(false);
 
+  const [timerExpiresAt, setTimerExpiresAt] = useState(null);
+
+  const [serverAnswers, setServerAnswers] = useState(null);
+
   const [submitting, setSubmitting] = useState(false);
 
   const [completed, setCompleted] = useState(false);
@@ -166,14 +170,35 @@ function QuizPageContent() {
   useEffect(() => {
     const loadQuizTimer = async () => {
       try {
-        const response = await fetch("/api/quiz-status", { cache: "no-store" });
+        const response = await fetch("/api/participants", { cache: "no-store" });
         const data = await response.json();
 
         if (!response.ok) {
           throw new Error(data.message || "Unable to load quiz timer.");
         }
 
-        setTimeLeft(data.durationSeconds ?? DEFAULT_QUIZ_TIME);
+        const participantStatus = data.participant;
+        if (participantStatus?.status === "completed") {
+          setScore(participantStatus.score);
+          setCompleted(true);
+          return;
+        }
+
+        setServerAnswers(participantStatus?.answers || {});
+
+        const expiresAt = new Date(participantStatus?.expiresAt);
+        if (!Number.isNaN(expiresAt.getTime())) {
+          setTimerExpiresAt(expiresAt);
+          setTimeLeft(
+            Math.max(0, Math.ceil((expiresAt.getTime() - Date.now()) / 1000))
+          );
+        } else {
+          setTimeLeft(
+            typeof data.durationSeconds === "number"
+              ? data.durationSeconds
+              : DEFAULT_QUIZ_TIME
+          );
+        }
       } catch (loadError) {
         console.error("Unable to load quiz timer:", loadError);
         setTimeLeft(DEFAULT_QUIZ_TIME);
@@ -268,17 +293,25 @@ function QuizPageContent() {
       return;
     }
 
-    if (timeLeft <= 0) {
-      finishQuiz();
-      return;
-    }
-
     const timer = setInterval(() => {
-      setTimeLeft((previous) => previous - 1);
+      if (!timerExpiresAt) {
+        setTimeLeft((previous) => Math.max(0, previous - 1));
+        return;
+      }
+
+      const remaining = Math.max(
+        0,
+        Math.ceil((timerExpiresAt.getTime() - Date.now()) / 1000)
+      );
+      setTimeLeft(remaining);
+      if (remaining === 0) {
+        clearInterval(timer);
+        finishQuiz();
+      }
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [timeLeft, completed, submitting, questionsLoading, questions, timerSettingsLoaded]);
+  }, [timerExpiresAt, completed, submitting, questionsLoading, questions, timerSettingsLoaded]);
 
   // ==========================================
   // Restore selected answer
@@ -291,6 +324,20 @@ function QuizPageContent() {
     setSelectedAnswer(savedAnswer || "");
   }, [currentQuestion, answers]);
 
+  useEffect(() => {
+    if (!serverAnswers || !questions.length) {
+      return;
+    }
+
+    const restoredAnswers = {};
+    questions.forEach((question, index) => {
+      if (typeof serverAnswers[question._id] === "string") {
+        restoredAnswers[index] = serverAnswers[question._id];
+      }
+    });
+    setAnswers(restoredAnswers);
+  }, [serverAnswers, questions]);
+
   // ==========================================
   // Select answer
   // ==========================================
@@ -302,6 +349,33 @@ function QuizPageContent() {
       ...previous,
       [currentQuestion]: answer,
     }));
+
+    const question = questions[currentQuestion];
+    if (!question?._id) {
+      return;
+    }
+
+    fetch("/api/participants", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "saveAnswer",
+        questionId: question._id,
+        answer,
+      }),
+    })
+      .then(async (response) => {
+        const data = await response.json();
+        if (response.ok && data.participant?.status === "completed") {
+          setScore(data.participant.score);
+          setCompleted(true);
+        } else if (!response.ok) {
+          console.error("Answer save failed:", data.message);
+        }
+      })
+      .catch((saveError) => {
+        console.error("Answer save failed:", saveError);
+      });
   };
 
   // ==========================================
