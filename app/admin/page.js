@@ -10,6 +10,7 @@ import {
 import Image from "next/image";
 
 const QUIZ_STATUS_KEY = "al-markazul-quiz-status";
+const SHARE_URL = "http://quiz-marakz-athari.vercel.app";
 
 const emptySummary = {
 	total: 0,
@@ -379,6 +380,8 @@ export default function AdminPage() {
 	const [showDeleteAllQuestionsModal, setShowDeleteAllQuestionsModal] = useState(false);
 	const [questionMenuOpen, setQuestionMenuOpen] = useState(false);
 	const questionMenuRef = useRef(null);
+	const [headerMenuOpen, setHeaderMenuOpen] = useState(false);
+	const headerMenuRef = useRef(null);
 	const [showQuestionModal, setShowQuestionModal] = useState(false);
 	const [questionSaving, setQuestionSaving] = useState(false);
 	const [questionError, setQuestionError] = useState("");
@@ -419,6 +422,33 @@ export default function AdminPage() {
 			document.removeEventListener("keydown", handleEscape);
 		};
 	}, [questionMenuOpen]);
+
+	useEffect(() => {
+		if (!headerMenuOpen) {
+			return;
+		}
+
+		const handleOutsideClick = (event) => {
+			if (!headerMenuRef.current?.contains(event.target)) {
+				setHeaderMenuOpen(false);
+			}
+		};
+
+		const handleEscape = (event) => {
+			if (event.key === "Escape") {
+				setHeaderMenuOpen(false);
+				headerMenuRef.current?.querySelector(".admin-menu-trigger")?.focus();
+			}
+		};
+
+		document.addEventListener("pointerdown", handleOutsideClick);
+		document.addEventListener("keydown", handleEscape);
+
+		return () => {
+			document.removeEventListener("pointerdown", handleOutsideClick);
+			document.removeEventListener("keydown", handleEscape);
+		};
+	}, [headerMenuOpen]);
 
 	useEffect(() => {
 		const handleBeforeInstallPrompt = (event) => {
@@ -805,6 +835,54 @@ export default function AdminPage() {
 		router.replace("/admin/login");
 	};
 
+	const handleShare = async () => {
+		setHeaderMenuOpen(false);
+
+		try {
+			if (navigator.share) {
+				await navigator.share({
+					title: "Al Markazul Athari Quiz",
+					url: SHARE_URL,
+				});
+				return;
+			}
+
+			if (navigator.clipboard?.writeText) {
+				await navigator.clipboard.writeText(SHARE_URL);
+				showInstallMessage("Quiz link copied to clipboard.");
+				return;
+			}
+
+			window.open(
+				`https://wa.me/?text=${encodeURIComponent(SHARE_URL)}`,
+				"_blank",
+				"noopener,noreferrer"
+			);
+		} catch (shareError) {
+			if (shareError.name === "AbortError") {
+				return;
+			}
+
+			console.error("Sharing the quiz link failed:", shareError);
+			try {
+				if (navigator.clipboard?.writeText) {
+					await navigator.clipboard.writeText(SHARE_URL);
+					showInstallMessage("Quiz link copied to clipboard.");
+					return;
+				}
+
+				window.open(
+					`https://wa.me/?text=${encodeURIComponent(SHARE_URL)}`,
+					"_blank",
+					"noopener,noreferrer"
+				);
+			} catch (fallbackError) {
+				console.error("Sharing or copying the quiz link failed:", fallbackError);
+				showInstallMessage("Unable to share or copy the quiz link.");
+			}
+		}
+	};
+
 	const handleInstallApp = async () => {
 		if (!installPrompt) {
 			showInstallMessage(
@@ -936,15 +1014,48 @@ export default function AdminPage() {
                 <Image src="/logo.png" alt="logo" width="43" height="50" style={{ marginRight: "5px" }} /><Image src="/brand name.png" alt="Al Markazul Athari" width="130" height="40" />
 				</div>
                 <div className="admin-header-actions">
-                	<button
-						type="button"
-						className="admin-signout"
-						onClick={handleSignOut}
-						disabled={isSigningOut}
-						aria-label={isSigningOut ? "Signing out" : undefined}
-					>
-						{isSigningOut ? <span className="admin-loading-dots" aria-hidden="true"><span /><span /><span /></span> : "Sign out"}
-					</button>
+					<div className={`admin-menu-container${headerMenuOpen ? " is-open" : ""}`} ref={headerMenuRef}>
+						<button
+							type="button"
+							className="admin-menu-trigger"
+							onClick={() => setHeaderMenuOpen((open) => !open)}
+							disabled={isSigningOut}
+							aria-label={headerMenuOpen ? "Close menu" : "Open menu"}
+							aria-haspopup="menu"
+							aria-expanded={headerMenuOpen}
+							aria-controls="admin-header-menu"
+						>
+							<svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+								<path d="M4 6h16M4 12h16M4 18h16" />
+							</svg>
+						</button>
+						{headerMenuOpen && (
+							<div className="admin-dropdown-menu" id="admin-header-menu" role="menu" aria-label="Admin menu">
+								<button className="admin-menu-signout-action" type="button" role="menuitem" onClick={handleSignOut} disabled={isSigningOut}>
+									<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+										<path d="M10 17l5-5-5-5M15 12H3m9-9h6a2 2 0 012 2v14a2 2 0 01-2 2h-6" />
+									</svg>
+									{isSigningOut ? "Signing out..." : "Sign Out"}
+								</button>
+								<button className="admin-menu-share-action" type="button" role="menuitem" onClick={handleShare}>
+									<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+										<circle cx="18" cy="5" r="3" />
+										<circle cx="6" cy="12" r="3" />
+										<circle cx="18" cy="19" r="3" />
+										<path d="m8.6 10.7 6.8-4.4m-6.8 7.1 6.8 4.4" />
+									</svg>
+									Share
+								</button>
+							</div>
+						)}
+					</div>
+					{headerMenuOpen && (
+						<div
+							className="admin-menu-backdrop"
+							aria-hidden="true"
+							onPointerDown={() => setHeaderMenuOpen(false)}
+						/>
+					)}
 				</div>
 			</header>
 			{installMessage && (
