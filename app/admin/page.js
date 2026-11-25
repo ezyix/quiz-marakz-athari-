@@ -25,8 +25,6 @@ const emptySummary = {
 };
 
 const PARTICIPANTS_PAGE_SIZE = 50;
-const PARTICIPANTS_REFRESH_MS = 5000;
-
 const emptyPagination = {
 	page: 1,
 	limit: PARTICIPANTS_PAGE_SIZE,
@@ -725,18 +723,6 @@ export default function AdminPage() {
 		loadParticipants();
 		loadQuestions();
 	}, [authenticated]);
-
-	useEffect(() => {
-		if (!authenticated || !quizStarted) {
-			return;
-		}
-
-		const refreshInterval = setInterval(() => {
-			loadParticipants({ silent: true });
-		}, PARTICIPANTS_REFRESH_MS);
-
-		return () => clearInterval(refreshInterval);
-	}, [authenticated, quizStarted]);
 
 	 const handleStartQuiz = async () => {
 		 if (questions.length === 0) {
