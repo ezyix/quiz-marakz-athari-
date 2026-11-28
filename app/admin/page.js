@@ -341,6 +341,340 @@ async function createParticipantsPdf(participants) {
 	return new Blob([pdfBytes], { type: "application/pdf" });
 }
 
+async function createAnswerKeyPdf(questions) {
+	await document.fonts.ready;
+
+	const pageWidth = 595;
+	const pageHeight = 842;
+	const scale = 4;
+	const margin = 24;
+	const questionsPerPage = 5;
+	const headingHeight = 36;
+	const cardGap = 6;
+	const cardTop = margin + headingHeight;
+	const cardPadding = 10;
+	const questionAnswerGap = 16;
+	const answerOptionsGap = 12;
+	const contentWidth = pageWidth - margin * 2;
+	const cardHeight =
+		(pageHeight - margin - cardTop - cardGap * (questionsPerPage - 1)) /
+		questionsPerPage;
+	const pages = [];
+
+	const wrapText = (context, text, maxWidth) => {
+		const lines = [];
+		const paragraphs = String(text ?? "").split(/\r?\n/);
+
+		paragraphs.forEach((paragraph) => {
+			const words = paragraph.trim().split(/\s+/).filter(Boolean);
+			let line = "";
+
+			words.forEach((word) => {
+				if (context.measureText(word).width > maxWidth) {
+					if (line) {
+						lines.push(line);
+						line = "";
+					}
+
+					let part = "";
+					for (const character of Array.from(word)) {
+						if (part && context.measureText(part + character).width > maxWidth) {
+							lines.push(part);
+							part = character;
+						} else {
+							part += character;
+						}
+					}
+					line = part;
+					return;
+				}
+
+				const nextLine = line ? `${line} ${word}` : word;
+				if (line && context.measureText(nextLine).width > maxWidth) {
+					lines.push(line);
+					line = word;
+				} else {
+					line = nextLine;
+				}
+			});
+
+			if (line) {
+				lines.push(line);
+			}
+		});
+
+		return lines.length ? lines : [""];
+	};
+
+	const createPage = () => {
+		const canvas = document.createElement("canvas");
+		canvas.width = pageWidth * scale;
+		canvas.height = pageHeight * scale;
+		const context = canvas.getContext("2d");
+		if (!context) {
+			throw new Error("Unable to prepare the answer key PDF.");
+		}
+
+		context.scale(scale, scale);
+		context.fillStyle = "#f4f8fc";
+		context.fillRect(0, 0, pageWidth, pageHeight);
+		return { canvas, context };
+	};
+
+	const optionCellWidth = (contentWidth - 20) / 2;
+	const buildQuestionLayout = (context, item, fontScale) => {
+		const questionFontSize = 14 * fontScale;
+		const optionFontSize = 11 * fontScale;
+		const questionLineHeight = 16 * fontScale;
+		const optionLineHeight = 13.5 * fontScale;
+
+		context.font = `700 ${questionFontSize}px 'DM Sans', 'Noto Serif Malayalam', 'Manjari', sans-serif`;
+		const questionLines = wrapText(context, item.question, contentWidth - 58);
+		const optionRows = (Array.isArray(item.options) ? item.options : []).map((option, optionIndex) => {
+			const isCorrect = option === item.answer;
+			context.font = `${optionFontSize}px 'DM Sans', 'Noto Serif Malayalam', 'Manjari', sans-serif`;
+			return {
+				label: String.fromCharCode(65 + optionIndex),
+				isCorrect,
+				textLines: wrapText(
+					context,
+					option,
+					optionCellWidth - (isCorrect ? 70 : 36)
+				),
+			};
+		});
+		const optionRowHeights = [0, 1].map((rowIndex) => {
+			const rowOptions = optionRows.filter(
+				(_, optionIndex) => Math.floor(optionIndex / 2) === rowIndex
+			);
+			return Math.max(
+				16,
+				...rowOptions.map((option) => option.textLines.length * optionLineHeight + 4)
+			);
+		});
+		const contentHeight =
+			questionLines.length * questionLineHeight +
+			questionAnswerGap +
+			optionRowHeights.reduce((total, height) => total + height, 0) +
+			answerOptionsGap;
+
+		return {
+			questionFontSize,
+			optionFontSize,
+			questionLineHeight,
+			optionLineHeight,
+			questionLines,
+			optionRows,
+			optionRowHeights,
+			contentHeight,
+		};
+	};
+
+	const measureCanvas = document.createElement("canvas");
+	const measureContext = measureCanvas.getContext("2d");
+	if (!measureContext) {
+		throw new Error("Unable to measure answer key text.");
+	}
+
+	let questionLayouts = [];
+	for (let scaleStep = 20; scaleStep >= 8; scaleStep -= 1) {
+		const fontScale = scaleStep / 20;
+		questionLayouts = questions.map((item) =>
+			buildQuestionLayout(measureContext, item, fontScale)
+		);
+		if (questionLayouts.every(
+			(layout) => layout.contentHeight <= cardHeight - cardPadding * 2
+		)) {
+			break;
+		}
+	}
+
+	for (let startIndex = 0; startIndex < questions.length; startIndex += questionsPerPage) {
+		const page = createPage();
+		const pageQuestions = questions.slice(startIndex, startIndex + questionsPerPage);
+		const { context } = page;
+
+		context.font = "700 20px 'DM Sans', 'Noto Serif Malayalam', 'Manjari', sans-serif";
+		context.fillStyle = "#18324a";
+		context.textAlign = "center";
+		context.fillText("Answer Key", pageWidth / 2, margin + 20);
+		context.textAlign = "left";
+		context.strokeStyle = "#cbdff0";
+		context.lineWidth = 0.8;
+		context.beginPath();
+		context.moveTo(margin, cardTop - 5);
+		context.lineTo(pageWidth - margin, cardTop - 5);
+		context.stroke();
+
+		pageQuestions.forEach((item, pageIndex) => {
+			const cardX = margin;
+			const cardY = cardTop + pageIndex * (cardHeight + cardGap);
+			const layout = questionLayouts[startIndex + pageIndex];
+
+			context.beginPath();
+			context.roundRect(cardX, cardY, contentWidth, cardHeight, 8);
+			context.fillStyle = "#ffffff";
+			context.fill();
+			context.strokeStyle = "#d5e4f1";
+			context.lineWidth = 0.8;
+			context.stroke();
+			context.fillStyle = "#4a91d2";
+			context.fillRect(cardX, cardY + 7, 2, cardHeight - 14);
+
+			const questionBadgeCenterY =
+				cardY + cardPadding + layout.questionFontSize / 2;
+			context.beginPath();
+			context.roundRect(cardX + 8, questionBadgeCenterY - 7, 36, 14, 5);
+			context.fillStyle = "#e8f3fc";
+			context.fill();
+			context.font = "700 7px 'DM Sans', sans-serif";
+			context.fillStyle = "#245a85";
+			context.textBaseline = "middle";
+			context.fillText(`Q - ${startIndex + pageIndex + 1}`, cardX + 11, questionBadgeCenterY);
+			context.textBaseline = "alphabetic";
+
+			context.font = `700 ${layout.questionFontSize}px 'DM Sans', 'Noto Serif Malayalam', 'Manjari', sans-serif`;
+			context.fillStyle = "#18324a";
+			layout.questionLines.forEach((line, lineIndex) => {
+				context.fillText(
+					line,
+					cardX + 50,
+					cardY + cardPadding + layout.questionFontSize + lineIndex * layout.questionLineHeight
+				);
+			});
+
+			let optionY =
+				cardY +
+				cardPadding +
+				layout.questionLines.length * layout.questionLineHeight +
+				questionAnswerGap;
+			layout.optionRowHeights.forEach((rowHeight, rowIndex) => {
+				for (let columnIndex = 0; columnIndex < 2; columnIndex += 1) {
+					const option = layout.optionRows[rowIndex * 2 + columnIndex];
+					if (!option) {
+						continue;
+					}
+
+					const optionX = cardX + 8 + columnIndex * (optionCellWidth + 5);
+					context.beginPath();
+					context.roundRect(optionX, optionY, optionCellWidth, rowHeight, 4);
+					context.fillStyle = option.isCorrect ? "#eaf8f0" : "#f8fbff";
+					context.fill();
+					context.strokeStyle = option.isCorrect ? "#b8e4ce" : "#e0eaf3";
+					context.lineWidth = 0.6;
+					context.stroke();
+
+					const markerX = optionX + 5;
+					const markerY = optionY + (rowHeight - 10) / 2;
+					context.beginPath();
+					context.roundRect(markerX, markerY, 13, 12, 4);
+					context.fillStyle = option.isCorrect ? "#25a86b" : "#eaf1f7";
+					context.fill();
+					if (option.isCorrect) {
+						context.strokeStyle = "#ffffff";
+						context.lineWidth = 1;
+						context.lineCap = "round";
+						context.lineJoin = "round";
+						context.beginPath();
+						context.moveTo(markerX + 3, markerY + 6);
+						context.lineTo(markerX + 5.3, markerY + 8.2);
+						context.lineTo(markerX + 10, markerY + 3.5);
+						context.stroke();
+					} else {
+						context.font = "700 6px 'DM Sans', sans-serif";
+						context.fillStyle = "#6f879b";
+						context.textAlign = "center";
+						context.textBaseline = "middle";
+						context.fillText(option.label, markerX + 6.5, markerY + 6);
+						context.textAlign = "left";
+						context.textBaseline = "alphabetic";
+					}
+
+					context.font = `${layout.optionFontSize}px 'DM Sans', 'Noto Serif Malayalam', 'Manjari', sans-serif`;
+					context.fillStyle = option.isCorrect ? "#207d52" : "#18324a";
+					const textTop =
+						optionY +
+						(rowHeight - option.textLines.length * layout.optionLineHeight) / 2;
+					option.textLines.forEach((line, lineIndex) => {
+						context.fillText(
+							line,
+							optionX + 24,
+							textTop + layout.optionFontSize + lineIndex * layout.optionLineHeight
+						);
+					});
+
+					if (option.isCorrect) {
+						context.beginPath();
+						context.roundRect(
+							optionX + optionCellWidth - 40,
+							optionY + (rowHeight - 10) / 2,
+							35,
+							10,
+							4
+						);
+						context.fillStyle = "#d7f2e3";
+						context.fill();
+						context.font = "700 5.5px 'DM Sans', sans-serif";
+						context.fillStyle = "#207d52";
+						context.textAlign = "right";
+						context.textBaseline = "middle";
+						context.fillText(
+							"Correct",
+							optionX + optionCellWidth - 9,
+							optionY + rowHeight / 2
+						);
+						context.textAlign = "left";
+						context.textBaseline = "alphabetic";
+					}
+				}
+				optionY += rowHeight + answerOptionsGap;
+			});
+		});
+
+		pages.push({
+			imageBinary: atob(page.canvas.toDataURL("image/jpeg", 0.98).split(",")[1]),
+			width: page.canvas.width,
+			height: page.canvas.height,
+		});
+	}
+
+	const objects = [
+		"<< /Type /Catalog /Pages 2 0 R >>",
+		`<< /Type /Pages /Kids [${pages.map((_, index) => `${3 + index * 3} 0 R`).join(" ")}] /Count ${pages.length} >>`,
+	];
+
+	pages.forEach(({ imageBinary, width, height }, index) => {
+		const pageId = 3 + index * 3;
+		const contentId = pageId + 1;
+		const imageId = pageId + 2;
+		const pageContent = "q 595 0 0 842 0 0 cm /Im0 Do Q";
+		objects.push(
+			`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /XObject << /Im0 ${imageId} 0 R >> >> /Contents ${contentId} 0 R >>`,
+			`<< /Length ${pageContent.length} >>\nstream\n${pageContent}\nendstream`,
+			`<< /Type /XObject /Subtype /Image /Width ${width} /Height ${height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${imageBinary.length} >>\nstream\n${imageBinary}\nendstream`
+		);
+	});
+
+	let pdf = "%PDF-1.4\n";
+	const offsets = [0];
+	objects.forEach((object, index) => {
+		offsets.push(pdf.length);
+		pdf += `${index + 1} 0 obj\n${object}\nendobj\n`;
+	});
+	const xrefOffset = pdf.length;
+	pdf += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+	offsets.slice(1).forEach((offset) => {
+		pdf += `${String(offset).padStart(10, "0")} 00000 n \n`;
+	});
+	pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`;
+
+	const pdfBytes = new Uint8Array(pdf.length);
+	for (let index = 0; index < pdf.length; index += 1) {
+		pdfBytes[index] = pdf.charCodeAt(index);
+	}
+	return new Blob([pdfBytes], { type: "application/pdf" });
+}
+
 export default function AdminPage() {
 	const router = useRouter();
 	const [authenticated, setAuthenticated] = useState(false);
@@ -375,6 +709,7 @@ export default function AdminPage() {
 	const [questionDeleting, setQuestionDeleting] = useState("");
 	const [questionPendingDelete, setQuestionPendingDelete] = useState(null);
 	const [questionDeletingAll, setQuestionDeletingAll] = useState(false);
+	const [answerKeyDownloading, setAnswerKeyDownloading] = useState(false);
 	const [showDeleteAllQuestionsModal, setShowDeleteAllQuestionsModal] = useState(false);
 	const [questionMenuOpen, setQuestionMenuOpen] = useState(false);
 	const questionMenuRef = useRef(null);
@@ -958,6 +1293,32 @@ export default function AdminPage() {
 		}
 	};
 
+	const handleDownloadAnswerKey = async () => {
+		if (questionsLoading || answerKeyDownloading || !questions.length) {
+			return;
+		}
+
+		setAnswerKeyDownloading(true);
+		showInstallMessage("Preparing answer key PDF...");
+		try {
+			const pdf = await createAnswerKeyPdf(questions);
+			const url = URL.createObjectURL(pdf);
+			const link = document.createElement("a");
+			link.href = url;
+			link.download = "al-markazul-answer-key.pdf";
+			document.body.appendChild(link);
+			link.click();
+			link.remove();
+			window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+			showInstallMessage("Answer key downloaded.");
+		} catch (downloadError) {
+			console.error("Answer key PDF download failed:", downloadError);
+			showInstallMessage("Unable to create the answer key PDF.");
+		} finally {
+			setAnswerKeyDownloading(false);
+		}
+	};
+
 	if (!authenticated) {
 		return (
 			<main className="admin-page admin-session-loading-page">
@@ -1256,6 +1617,27 @@ export default function AdminPage() {
 													<path d="M3 6h18m-2 0-.9 14H5.9L5 6m4 0V4h6v2m-5 4v6m4-6v6" />
 												</svg>
 												{questionDeletingAll ? "Deleting..." : "Delete all questions"}
+											</button>
+											<button
+												className="download-answer-key-action"
+												type="button"
+												onClick={() => {
+													setQuestionMenuOpen(false);
+													handleDownloadAnswerKey();
+												}}
+												disabled={questionsLoading || answerKeyDownloading || !questions.length}
+												aria-label={answerKeyDownloading ? "Preparing answer key PDF" : "Download answer key"}
+												title={questionsLoading ? "Loading questions" : !questions.length ? "No questions to download" : "Download answer key"}
+											>
+												{answerKeyDownloading ? (
+													<span className="admin-spinner" aria-hidden="true" />
+												) : (
+													<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+														<path d="M12 3v12m-5-5 5 5 5-5" />
+														<path d="M5 17v3h14v-3" />
+													</svg>
+												)}
+												Answer key
 											</button>
 										</div>
 									</>
